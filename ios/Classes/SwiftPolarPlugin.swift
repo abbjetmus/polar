@@ -437,7 +437,7 @@ public class SwiftPolarPlugin:
 
   func doRestart(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
     let identifier = call.arguments as! String
-    _ = api.doRestart(identifier)
+    _ = api.doRestart(identifier, preservePairingInformation: false)
       .subscribe(
         onCompleted: {
           result(nil)
