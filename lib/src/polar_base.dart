@@ -44,13 +44,14 @@ class Polar {
       .map((e) => e.data);
 
   /// feature ready callback
-  Stream<PolarSdkFeatureReadyEvent> get sdkFeatureReady =>
-      _eventStream.where((e) => e.event == PolarEvent.sdkFeatureReady).map(
-            (e) => PolarSdkFeatureReadyEvent(
-              e.data[0],
-              PolarSdkFeature.fromJson(e.data[1]),
-            ),
-          );
+  Stream<PolarSdkFeatureReadyEvent> get sdkFeatureReady => _eventStream
+      .where((e) => e.event == PolarEvent.sdkFeatureReady)
+      .map(
+        (e) => PolarSdkFeatureReadyEvent(
+          e.data[0],
+          PolarSdkFeature.fromJson(e.data[1]),
+        ),
+      );
 
   /// Device connection has been established.
   ///
@@ -70,13 +71,14 @@ class Polar {
   /// If PolarBleApi#disconnectFromPolarDevice is not called, a new connection attempt is dispatched automatically.
   ///
   /// - Parameter identifier: Polar device info
-  Stream<PolarDeviceDisconnectedEvent> get deviceDisconnected =>
-      _eventStream.where((e) => e.event == PolarEvent.deviceDisconnected).map(
-            (e) => PolarDeviceDisconnectedEvent(
-              PolarDeviceInfo.fromJson(jsonDecode(e.data[0])),
-              e.data[1],
-            ),
-          );
+  Stream<PolarDeviceDisconnectedEvent> get deviceDisconnected => _eventStream
+      .where((e) => e.event == PolarEvent.deviceDisconnected)
+      .map(
+        (e) => PolarDeviceDisconnectedEvent(
+          PolarDeviceInfo.fromJson(jsonDecode(e.data[0])),
+          e.data[1],
+        ),
+      );
 
   ///  Received DIS info.
   ///
@@ -110,8 +112,8 @@ class Polar {
   ///  - onNext: for every new polar device found
   Stream<PolarDeviceInfo> searchForDevice() {
     return _searchChannel.receiveBroadcastStream().map(
-          (event) => PolarDeviceInfo.fromJson(jsonDecode(event)),
-        );
+      (event) => PolarDeviceInfo.fromJson(jsonDecode(event)),
+    );
   }
 
   /// Request a connection to a Polar device. Invokes `PolarBleApiObservers` polarDeviceConnected.
@@ -238,8 +240,10 @@ class Polar {
   ///   - onNext: for every air packet received. see `PolarHrData`
   ///   - onError: see `PolarErrors` for possible errors invoked
   Stream<PolarHrData> startHrStreaming(String identifier) {
-    return _startStreaming(PolarDataType.hr, identifier)
-        .map(PolarHrData.fromJson);
+    return _startStreaming(
+      PolarDataType.hr,
+      identifier,
+    ).map(PolarHrData.fromJson);
   }
 
   /// Start the ECG (Electrocardiography) stream. ECG stream is stopped if the connection is closed, error occurs or stream is disposed.
@@ -340,8 +344,10 @@ class Polar {
   ///   - onNext: for every air packet received. see `PolarPpiData`
   ///   - onError: see `PolarErrors` for possible errors invoked
   Stream<PolarPpiData> startPpiStreaming(String identifier) {
-    return _startStreaming(PolarDataType.ppi, identifier)
-        .map(PolarPpiData.fromJson);
+    return _startStreaming(
+      PolarDataType.ppi,
+      identifier,
+    ).map(PolarPpiData.fromJson);
   }
 
   /// Start temperature stream. Temperature stream is stopped if the connection is closed,
@@ -400,10 +406,12 @@ class Polar {
     required RecordingInterval interval,
     required SampleType sampleType,
   }) {
-    return _methodChannel.invokeMethod(
-      'startRecording',
-      [identifier, exerciseId, interval.toJson(), sampleType.toJson()],
-    );
+    return _methodChannel.invokeMethod('startRecording', [
+      identifier,
+      exerciseId,
+      interval.toJson(),
+      sampleType.toJson(),
+    ]);
   }
 
   /// Request stop for current recording. Supported only by Polar H10. Requires `polarFileTransfer` feature.
@@ -441,8 +449,10 @@ class Polar {
   ///   - onNext: see `PolarExerciseEntry`
   ///   - onError: see `PolarErrors` for possible errors invoked
   Future<List<PolarExerciseEntry>> listExercises(String identifier) async {
-    final result =
-        await _methodChannel.invokeListMethod('listExercises', identifier);
+    final result = await _methodChannel.invokeListMethod(
+      'listExercises',
+      identifier,
+    );
     if (result == null) {
       return [];
     }
@@ -464,8 +474,10 @@ class Polar {
     String identifier,
     PolarExerciseEntry entry,
   ) async {
-    final result = await _methodChannel
-        .invokeMethod('fetchExercise', [identifier, jsonEncode(entry)]);
+    final result = await _methodChannel.invokeMethod('fetchExercise', [
+      identifier,
+      jsonEncode(entry),
+    ]);
     return PolarExerciseData.fromJson(jsonDecode(result));
   }
 
@@ -478,8 +490,10 @@ class Polar {
   ///   - complete: entry successfully removed
   ///   - onError: see `PolarErrors` for possible errors invoked
   Future<void> removeExercise(String identifier, PolarExerciseEntry entry) {
-    return _methodChannel
-        .invokeMethod('removeExercise', [identifier, jsonEncode(entry)]);
+    return _methodChannel.invokeMethod('removeExercise', [
+      identifier,
+      jsonEncode(entry),
+    ]);
   }
 
   /// Set [LedConfig] to enable or disable blinking LEDs (Verity Sense 2.2.1+).
@@ -491,8 +505,10 @@ class Polar {
   ///   - success: when enable or disable sent to device
   ///   - onError: see `PolarErrors` for possible errors invoked
   Future<void> setLedConfig(String identifier, LedConfig config) {
-    return _methodChannel
-        .invokeMethod('setLedConfig', [identifier, jsonEncode(config)]);
+    return _methodChannel.invokeMethod('setLedConfig', [
+      identifier,
+      jsonEncode(config),
+    ]);
   }
 
   /// Perform restart device.
@@ -517,6 +533,46 @@ class Polar {
     return _methodChannel.invokeMethod('doFactoryReset', identifier);
   }
 
+  /// Check if there is a firmware update available for the device.
+  ///
+  /// This method checks if there is an update available using the
+  /// Polar Firmware Management API (https://firmware-management.polar.com/docs/).
+  ///
+  /// - Parameters:
+  ///   - identifier: polar device id or UUID
+  /// - Returns: Future with firmware update information
+  ///   - success: returns PolarFirmwareUpdateInfo with update availability and version information
+  ///   - onError: see `PolarErrors` for possible errors invoked
+  Future<PolarFirmwareUpdateInfo> checkFirmwareUpdate(String identifier) async {
+    final response = await _methodChannel.invokeMethod(
+      'checkFirmwareUpdate',
+      identifier,
+    );
+    return PolarFirmwareUpdateInfo.fromJson(jsonDecode(response));
+  }
+
+  /// Update the device firmware to the latest available version.
+  ///
+  /// This method updates the device with the latest available firmware using the
+  /// Polar Firmware Management API (https://firmware-management.polar.com/docs/).
+  ///
+  /// **CAUTION:** Performing firmware update with Polar devices will erase all data
+  /// inside the device, including SDK offline recordings. Please make sure to sync
+  /// any data you wish to retrieve before doing it.
+  ///
+  /// **Note:** doFirstTimeUse() is not necessary to do after firmware update as there
+  /// is automatic backup to send user settings back to the device as the last step
+  /// of the firmware update process.
+  ///
+  /// - Parameters:
+  ///   - identifier: polar device id or UUID
+  /// - Returns: Completable stream
+  ///   - success: when firmware update completed successfully
+  ///   - onError: see `PolarErrors` for possible errors invoked
+  Future<void> updateFirmware(String identifier) {
+    return _methodChannel.invokeMethod('updateFirmware', identifier);
+  }
+
   ///  Enables SDK mode.
   Future<void> enableSdkMode(String identifier) {
     return _methodChannel.invokeMethod('enableSdkMode', identifier);
@@ -531,8 +587,10 @@ class Polar {
   ///
   /// Note, SDK status check is supported by VeritySense starting from firmware 2.1.0
   Future<bool> isSdkModeEnabled(String identifier) async {
-    final result =
-        await _methodChannel.invokeMethod<bool>('isSdkModeEnabled', identifier);
+    final result = await _methodChannel.invokeMethod<bool>(
+      'isSdkModeEnabled',
+      identifier,
+    );
     return result!;
   }
 
@@ -592,14 +650,11 @@ class Polar {
     PolarDataType feature, {
     PolarSensorSetting? settings,
   }) async {
-    await _methodChannel.invokeMethod(
-      'startOfflineRecording',
-      [
-        identifier,
-        feature.toJson(),
-        settings != null ? jsonEncode(settings) : null,
-      ],
-    );
+    await _methodChannel.invokeMethod('startOfflineRecording', [
+      identifier,
+      feature.toJson(),
+      settings != null ? jsonEncode(settings) : null,
+    ]);
   }
 
   /// Stops offline recording for a specific data type on a Polar device.
@@ -614,10 +669,10 @@ class Polar {
     String identifier,
     PolarDataType feature,
   ) async {
-    await _methodChannel.invokeMethod(
-      'stopOfflineRecording',
-      [identifier, feature.toJson()],
-    );
+    await _methodChannel.invokeMethod('stopOfflineRecording', [
+      identifier,
+      feature.toJson(),
+    ]);
   }
 
   /// Checks the status of offline recording for a specific data type.
@@ -765,10 +820,10 @@ class Polar {
     String identifier,
     PolarOfflineRecordingEntry entry,
   ) async {
-    await _methodChannel.invokeMethod(
-      'removeOfflineRecord',
-      [identifier, jsonEncode(entry.toJson())],
-    );
+    await _methodChannel.invokeMethod('removeOfflineRecord', [
+      identifier,
+      jsonEncode(entry.toJson()),
+    ]);
   }
 
   /// Fetches the available and used disk space on a Polar device.
@@ -795,8 +850,10 @@ class Polar {
   ///   - onError: Possible errors are returned as exceptions.
   Future<DateTime?> getLocalTime(String identifier) async {
     // Call the native method to get the local time from the Polar device
-    final result =
-        await _methodChannel.invokeMethod<String>('getLocalTime', identifier);
+    final result = await _methodChannel.invokeMethod<String>(
+      'getLocalTime',
+      identifier,
+    );
 
     // If the result is null, return null
     if (result == null) return null;
@@ -850,8 +907,10 @@ class Polar {
   ///   - onError: Possible errors are returned as exceptions.
   Future<bool> isFtuDone(String identifier) async {
     // Call the native method to check FTU status
-    final result =
-        await _methodChannel.invokeMethod<bool>('isFtuDone', identifier);
+    final result = await _methodChannel.invokeMethod<bool>(
+      'isFtuDone',
+      identifier,
+    );
 
     // If the result is null, default to false for safety
     return result ?? false;
@@ -871,14 +930,11 @@ class Polar {
     PolarStoredDataTypeEnum dataType,
     DateTime until,
   ) async {
-    await _methodChannel.invokeMethod<void>(
-      'deleteStoredDeviceData',
-      [
-        identifier,
-        dataType.toInt(),
-        DateFormat('yyyy-MM-dd').format(until),
-      ],
-    );
+    await _methodChannel.invokeMethod<void>('deleteStoredDeviceData', [
+      identifier,
+      dataType.toInt(),
+      DateFormat('yyyy-MM-dd').format(until),
+    ]);
   }
 
   /// Deletes device date folders between two dates.
@@ -924,14 +980,11 @@ class Polar {
       final formattedFromDate = DateFormat('yyyy-MM-dd').format(fromDate);
       final formattedToDate = DateFormat('yyyy-MM-dd').format(toDate);
 
-      final result = await _methodChannel.invokeMethod<String>(
-        'getSteps',
-        [
-          identifier,
-          formattedFromDate,
-          formattedToDate,
-        ],
-      );
+      final result = await _methodChannel.invokeMethod<String>('getSteps', [
+        identifier,
+        formattedFromDate,
+        formattedToDate,
+      ]);
 
       // If result is null, return an empty list
       if (result == null || result.isEmpty) {
@@ -973,14 +1026,11 @@ class Polar {
       // Ensure dates are properly formatted with hours and minutes in UTC
       final formattedFromDate = DateFormat('yyyy-MM-dd').format(fromDate);
       final formattedToDate = DateFormat('yyyy-MM-dd').format(toDate);
-      final result = await _methodChannel.invokeMethod<String>(
-        'getDistance',
-        [
-          identifier,
-          formattedFromDate,
-          formattedToDate,
-        ],
-      );
+      final result = await _methodChannel.invokeMethod<String>('getDistance', [
+        identifier,
+        formattedFromDate,
+        formattedToDate,
+      ]);
 
       // If result is null, return an empty list
       if (result == null || result.isEmpty) {
@@ -1025,11 +1075,7 @@ class Polar {
 
       final result = await _methodChannel.invokeMethod<String>(
         'getActiveTime',
-        [
-          identifier,
-          formattedFromDate,
-          formattedToDate,
-        ],
+        [identifier, formattedFromDate, formattedToDate],
       );
 
       // If result is null, return an empty list
@@ -1081,11 +1127,7 @@ class Polar {
 
       final result = await _methodChannel.invokeMethod<String>(
         'getActivitySampleData',
-        [
-          identifier,
-          formattedFromDate,
-          formattedToDate,
-        ],
+        [identifier, formattedFromDate, formattedToDate],
       );
 
       // If result is null, return an empty list
@@ -1097,8 +1139,10 @@ class Polar {
       try {
         final data = jsonDecode(result) as List;
         return data
-            .map((e) =>
-                PolarActivitySampleData.fromJson(e as Map<String, dynamic>))
+            .map(
+              (e) =>
+                  PolarActivitySampleData.fromJson(e as Map<String, dynamic>),
+            )
             .toList();
       } catch (e) {
         debugPrint('Error parsing activity sample data: $e');
@@ -1151,10 +1195,11 @@ class Polar {
     final fromDateString = DateFormat('yyyy-MM-dd').format(fromDate);
     final toDateString = DateFormat('yyyy-MM-dd').format(toDate);
 
-    return _methodChannel.invokeMethod(
-      'deleteDeviceDateFolders',
-      [identifier, fromDateString, toDateString],
-    );
+    return _methodChannel.invokeMethod('deleteDeviceDateFolders', [
+      identifier,
+      fromDateString,
+      toDateString,
+    ]);
   }
 
   /// Notify device that data transfer operations are completed.

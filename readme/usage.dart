@@ -15,8 +15,9 @@ void streamWhenReady() async {
         e.identifier == identifier &&
         e.feature == PolarSdkFeature.onlineStreaming,
   );
-  final availabletypes =
-      await polar.getAvailableOnlineStreamDataTypes(identifier);
+  final availabletypes = await polar.getAvailableOnlineStreamDataTypes(
+    identifier,
+  );
 
   debugPrint('available types: $availabletypes');
 
@@ -34,5 +35,21 @@ void streamWhenReady() async {
     polar
         .startAccStreaming(identifier)
         .listen((e) => debugPrint('ACC data received'));
+  }
+}
+
+void firmwareUpdateExample() async {
+  // Check if firmware update is available
+  final updateInfo = await polar.checkFirmwareUpdate(identifier);
+  if (updateInfo.isUpdateAvailable) {
+    debugPrint('Update available: ${updateInfo.availableVersion}');
+    debugPrint('Current version: ${updateInfo.currentVersion}');
+
+    // Perform firmware update
+    // WARNING: This will erase all data on the device
+    await polar.updateFirmware(identifier);
+    debugPrint('Firmware update completed');
+  } else {
+    debugPrint('No firmware update available');
   }
 }

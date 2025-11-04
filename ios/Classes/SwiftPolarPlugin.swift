@@ -122,6 +122,10 @@ public class SwiftPolarPlugin:
         doFactoryReset(call, result)
       case "doRestart":
         doRestart(call, result)
+      case "checkFirmwareUpdate":
+        checkFirmwareUpdate(call, result)
+      case "updateFirmware":
+        updateFirmware(call, result)
       case "enableSdkMode":
         enableSdkMode(call, result)
       case "disableSdkMode":
@@ -446,6 +450,51 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "Error doing restart", message: error.localizedDescription, details: nil))
+        })
+  }
+
+  func checkFirmwareUpdate(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
+    let identifier = call.arguments as! String
+    _ = api.getFirmwareUpdateInfo(identifier)
+      .subscribe(
+        onSuccess: { updateInfo in
+          let response: [String: Any] = [
+            "isUpdateAvailable": updateInfo.isUpdateAvailable,
+            "currentVersion": updateInfo.currentVersion,
+            "availableVersion": updateInfo.availableVersion ?? NSNull()
+          ]
+          guard let jsonData = try? JSONSerialization.data(withJSONObject: response, options: []),
+                let jsonString = String(data: jsonData, encoding: .utf8) else {
+            result(FlutterError(
+              code: "Error encoding firmware update info",
+              message: "Failed to encode response",
+              details: nil))
+            return
+          }
+          result(jsonString)
+        },
+        onFailure: { error in
+          result(
+            FlutterError(
+              code: "Error checking firmware update",
+              message: error.localizedDescription,
+              details: nil))
+        })
+  }
+
+  func updateFirmware(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
+    let identifier = call.arguments as! String
+    _ = api.updateFirmware(identifier)
+      .subscribe(
+        onCompleted: {
+          result(nil)
+        },
+        onError: { error in
+          result(
+            FlutterError(
+              code: "Error updating firmware",
+              message: error.localizedDescription,
+              details: nil))
         })
   }
 

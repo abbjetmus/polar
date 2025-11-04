@@ -48,6 +48,37 @@ Info.plist:
 ## Usage
 
 <!-- embedme readme/usage.dart -->
+
+## Firmware Updates
+
+You can check if there is a firmware update available for your Polar device and perform the update directly through the plugin.
+
+### Checking for Updates
+
+Use the `checkFirmwareUpdate()` method to check if an update is available:
+
+```dart
+final updateInfo = await polar.checkFirmwareUpdate(identifier);
+if (updateInfo.isUpdateAvailable) {
+  debugPrint('Update available: ${updateInfo.availableVersion}');
+  debugPrint('Current version: ${updateInfo.currentVersion}');
+}
+```
+
+### Performing Firmware Update
+
+To update the firmware, simply call the `updateFirmware()` method. This will update the device with the latest available firmware using the [Polar Firmware Management API](https://firmware-management.polar.com/docs/).
+
+```dart
+await polar.updateFirmware(identifier);
+```
+
+### ⚠️ Important Notes
+
+- **Performing firmware update with Polar devices will erase all data inside the device**, including SDK offline recordings. Please make sure to sync any data you wish to retrieve before doing it.
+- `doFirstTimeUse()` is **not** necessary to do after firmware update, as there is automatic backup to send user settings back to the device as the last step of the firmware update process.
+
+<!-- embedme readme/usage.dart -->
 ```dart
 import 'package:flutter/foundation.dart';
 import 'package:polar/polar.dart';

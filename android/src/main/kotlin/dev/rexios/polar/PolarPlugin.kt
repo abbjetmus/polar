@@ -164,6 +164,8 @@ class PolarPlugin :
             "setLedConfig" -> setLedConfig(call, result)
             "doFactoryReset" -> doFactoryReset(call, result)
             "doRestart" -> doRestart(call, result)
+            "checkFirmwareUpdate" -> checkFirmwareUpdate(call, result)
+            "updateFirmware" -> updateFirmware(call, result)
             "enableSdkMode" -> enableSdkMode(call, result)
             "disableSdkMode" -> disableSdkMode(call, result)
             "isSdkModeEnabled" -> isSdkModeEnabled(call, result)
@@ -477,6 +479,45 @@ class PolarPlugin :
         val identifier = call.arguments as String
         wrapper.api
             .doRestart(identifier)
+            .subscribe({
+                runOnUiThread { result.success(null) }
+            }, {
+                runOnUiThread {
+                    result.error(it.toString(), it.message, null)
+                }
+            })
+            .discard()
+    }
+
+    private fun checkFirmwareUpdate(
+        call: MethodCall,
+        result: Result,
+    ) {
+        val identifier = call.arguments as String
+        wrapper.api
+            .getFirmwareUpdateInfo(identifier)
+            .subscribe({ updateInfo ->
+                val response = mapOf(
+                    "isUpdateAvailable" to updateInfo.isUpdateAvailable,
+                    "currentVersion" to updateInfo.currentVersion,
+                    "availableVersion" to updateInfo.availableVersion
+                )
+                runOnUiThread { result.success(gson.toJson(response)) }
+            }, {
+                runOnUiThread {
+                    result.error(it.toString(), it.message, null)
+                }
+            })
+            .discard()
+    }
+
+    private fun updateFirmware(
+        call: MethodCall,
+        result: Result,
+    ) {
+        val identifier = call.arguments as String
+        wrapper.api
+            .updateFirmware(identifier)
             .subscribe({
                 runOnUiThread { result.success(null) }
             }, {
