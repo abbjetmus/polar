@@ -50,4 +50,7 @@ enum PolarEvent {
 
   /// Power sources state received
   powerSourcesStateReceived,
+
+  /// Firmware update progress
+  firmwareUpdateProgress,
 }

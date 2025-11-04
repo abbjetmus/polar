@@ -69,8 +69,26 @@ if (updateInfo.isUpdateAvailable) {
 
 To update the firmware, simply call the `updateFirmware()` method. This will update the device with the latest available firmware using the [Polar Firmware Management API](https://firmware-management.polar.com/docs/).
 
+You can monitor the update progress by listening to the `firmwareUpdateProgress` stream:
+
 ```dart
+// Subscribe to firmware update progress
+final progressSubscription = polar.firmwareUpdateProgress
+    .where((event) => event.identifier == identifier)
+    .listen((progress) {
+  debugPrint('Firmware update progress: ${progress.progressPercentage}%');
+  debugPrint('Status: ${progress.status}');
+  
+  if (progress.isCompleted) {
+    debugPrint('Firmware update completed!');
+  }
+});
+
+// Start the firmware update
 await polar.updateFirmware(identifier);
+
+// Don't forget to cancel the subscription when done
+await progressSubscription.cancel();
 ```
 
 ### ⚠️ Important Notes

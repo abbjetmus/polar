@@ -45,10 +45,26 @@ void firmwareUpdateExample() async {
     debugPrint('Update available: ${updateInfo.availableVersion}');
     debugPrint('Current version: ${updateInfo.currentVersion}');
 
+    // Subscribe to firmware update progress
+    final progressSubscription = polar.firmwareUpdateProgress
+        .where((event) => event.identifier == identifier)
+        .listen((progress) {
+          debugPrint(
+            'Firmware update progress: ${progress.progressPercentage}%',
+          );
+          debugPrint('Status: ${progress.status}');
+
+          if (progress.isCompleted) {
+            debugPrint('Firmware update completed!');
+          }
+        });
+
     // Perform firmware update
     // WARNING: This will erase all data on the device
     await polar.updateFirmware(identifier);
-    debugPrint('Firmware update completed');
+
+    // Cancel the subscription when done
+    await progressSubscription.cancel();
   } else {
     debugPrint('No firmware update available');
   }

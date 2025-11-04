@@ -33,6 +33,8 @@ import com.polar.sdk.api.model.PolarHealthThermometerData
 import com.polar.sdk.api.model.PolarHrData
 import com.polar.sdk.api.model.PolarOfflineRecordingEntry
 import com.polar.sdk.api.model.PolarSensorSetting
+import com.polar.sdk.api.model.CheckFirmwareUpdateStatus
+import com.polar.sdk.api.model.FirmwareUpdateStatus
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -495,13 +497,26 @@ class PolarPlugin :
     ) {
         val identifier = call.arguments as String
         wrapper.api
-            .getFirmwareUpdateInfo(identifier)
-            .subscribe({ updateInfo ->
-                val response = mapOf(
-                    "isUpdateAvailable" to updateInfo.isUpdateAvailable,
-                    "currentVersion" to updateInfo.currentVersion,
-                    "availableVersion" to updateInfo.availableVersion
-                )
+            .checkFirmwareUpdate(identifier)
+            .subscribe({ status ->
+                val response = when (status) {
+                    is CheckFirmwareUpdateStatus.CheckFwUpdateAvailable -> mapOf(
+                        "isUpdateAvailable" to true,
+                        "currentVersion" to "",
+                        "availableVersion" to status.version
+                    )
+                    is CheckFirmwareUpdateStatus.CheckFwUpdateNotAvailable -> mapOf(
+                        "isUpdateAvailable" to false,
+                        "currentVersion" to status.details,
+                        "availableVersion" to null
+                    )
+                    is CheckFirmwareUpdateStatus.CheckFwUpdateFailed -> {
+                        runOnUiThread {
+                            result.error("CHECK_FW_UPDATE_FAILED", status.details, null)
+                        }
+                        return@subscribe
+                    }
+                }
                 runOnUiThread { result.success(gson.toJson(response)) }
             }, {
                 runOnUiThread {
@@ -516,16 +531,68 @@ class PolarPlugin :
         result: Result,
     ) {
         val identifier = call.arguments as String
+        var resultSent = false
         wrapper.api
             .updateFirmware(identifier)
-            .subscribe({
-                runOnUiThread { result.success(null) }
+            .subscribe({ status ->
+                // Map status to progress and emit progress events
+                val (progressPercentage, statusMessage, isCompleted) = mapFirmwareStatus(status)
+                val progressData = mapOf(
+                    "identifier" to identifier,
+                    "progressPercentage" to progressPercentage,
+                    "status" to statusMessage,
+                    "isCompleted" to isCompleted
+                )
+                wrapper.success("firmwareUpdateProgress", progressData)
+                
+                // Handle completion
+                when (status) {
+                    is FirmwareUpdateStatus.FwUpdateCompletedSuccessfully -> {
+                        if (!resultSent) {
+                            resultSent = true
+                            runOnUiThread { result.success(null) }
+                        }
+                    }
+                    is FirmwareUpdateStatus.FwUpdateFailed -> {
+                        if (!resultSent) {
+                            resultSent = true
+                            runOnUiThread {
+                                result.error("FW_UPDATE_FAILED", status.details, null)
+                            }
+                        }
+                    }
+                    is FirmwareUpdateStatus.FwUpdateNotAvailable -> {
+                        if (!resultSent) {
+                            resultSent = true
+                            runOnUiThread {
+                                result.error("FW_UPDATE_NOT_AVAILABLE", status.details, null)
+                            }
+                        }
+                    }
+                    else -> {
+                        // Other statuses are progress updates
+                    }
+                }
             }, {
-                runOnUiThread {
-                    result.error(it.toString(), it.message, null)
+                if (!resultSent) {
+                    runOnUiThread {
+                        result.error(it.toString(), it.message, null)
+                    }
                 }
             })
             .discard()
+    }
+    
+    private fun mapFirmwareStatus(status: FirmwareUpdateStatus): Triple<Int, String, Boolean> {
+        return when (status) {
+            is FirmwareUpdateStatus.FetchingFwUpdatePackage -> Triple(10, "Fetching firmware package: ${status.details}", false)
+            is FirmwareUpdateStatus.PreparingDeviceForFwUpdate -> Triple(30, "Preparing device: ${status.details}", false)
+            is FirmwareUpdateStatus.WritingFwUpdatePackage -> Triple(60, "Writing firmware: ${status.details}", false)
+            is FirmwareUpdateStatus.FinalizingFwUpdate -> Triple(90, "Finalizing update: ${status.details}", false)
+            is FirmwareUpdateStatus.FwUpdateCompletedSuccessfully -> Triple(100, "Update completed: ${status.details}", true)
+            is FirmwareUpdateStatus.FwUpdateNotAvailable -> Triple(0, "Update not available: ${status.details}", false)
+            is FirmwareUpdateStatus.FwUpdateFailed -> Triple(0, "Update failed: ${status.details}", false)
+        }
     }
 
     private fun enableSdkMode(
@@ -1538,6 +1605,7 @@ class PolarWrapper(
     ) {
         success("powerSourcesStateReceived", listOf(identifier, gson.toJson(powerSourcesState)))
     }
+
 }
 
 class StreamingChannel(

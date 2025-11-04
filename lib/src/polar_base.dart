@@ -105,6 +105,22 @@ class Polar {
             ),
           );
 
+  /// Firmware update progress stream.
+  ///
+  /// This stream emits progress updates during firmware update process.
+  /// Subscribe to this stream before calling [updateFirmware] to receive progress updates.
+  Stream<PolarFirmwareUpdateProgressEvent> get firmwareUpdateProgress =>
+      _eventStream
+          .where((e) => e.event == PolarEvent.firmwareUpdateProgress)
+          .map(
+            (e) => PolarFirmwareUpdateProgressEvent(
+              e.data['identifier'],
+              e.data['progressPercentage'],
+              e.data['status'],
+              e.data['isCompleted'],
+            ),
+          );
+
   /// Start searching for Polar device(s)
   ///
   /// - Parameter onNext: Invoked once for each device

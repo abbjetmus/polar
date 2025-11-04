@@ -66,3 +66,26 @@ class PolarDeviceDisconnectedEvent {
   /// Constructor
   PolarDeviceDisconnectedEvent(this.info, this.pairingError);
 }
+
+/// Firmware update progress event
+class PolarFirmwareUpdateProgressEvent {
+  /// Polar device id
+  final String identifier;
+
+  /// Progress percentage (0-100)
+  final int progressPercentage;
+
+  /// Current status message describing the update stage
+  final String status;
+
+  /// Whether the update is completed
+  final bool isCompleted;
+
+  /// Constructor
+  PolarFirmwareUpdateProgressEvent(
+    this.identifier,
+    this.progressPercentage,
+    this.status,
+    this.isCompleted,
+  );
+}

@@ -455,14 +455,31 @@ public class SwiftPolarPlugin:
 
   func checkFirmwareUpdate(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
     let identifier = call.arguments as! String
-    _ = api.getFirmwareUpdateInfo(identifier)
+    _ = api.checkFirmwareUpdate(identifier)
       .subscribe(
-        onSuccess: { updateInfo in
-          let response: [String: Any] = [
-            "isUpdateAvailable": updateInfo.isUpdateAvailable,
-            "currentVersion": updateInfo.currentVersion,
-            "availableVersion": updateInfo.availableVersion ?? NSNull()
-          ]
+        onNext: { status in
+          var response: [String: Any]
+          switch status {
+          case .checkFwUpdateAvailable(let version):
+            response = [
+              "isUpdateAvailable": true,
+              "currentVersion": "",
+              "availableVersion": version
+            ]
+          case .checkFwUpdateNotAvailable(let details):
+            response = [
+              "isUpdateAvailable": false,
+              "currentVersion": details,
+              "availableVersion": NSNull()
+            ]
+          case .checkFwUpdateFailed(let details):
+            result(FlutterError(
+              code: "Error checking firmware update",
+              message: details,
+              details: nil))
+            return
+          }
+          
           guard let jsonData = try? JSONSerialization.data(withJSONObject: response, options: []),
                 let jsonString = String(data: jsonData, encoding: .utf8) else {
             result(FlutterError(
@@ -473,7 +490,7 @@ public class SwiftPolarPlugin:
           }
           result(jsonString)
         },
-        onFailure: { error in
+        onError: { error in
           result(
             FlutterError(
               code: "Error checking firmware update",
@@ -484,18 +501,77 @@ public class SwiftPolarPlugin:
 
   func updateFirmware(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
     let identifier = call.arguments as! String
+    var resultSent = false
     _ = api.updateFirmware(identifier)
       .subscribe(
-        onCompleted: {
-          result(nil)
+        onNext: { [weak self] status in
+          guard let self = self else { return }
+          
+          // Map status to progress and emit progress events
+          let (progressPercentage, statusMessage, isCompleted) = self.mapFirmwareStatus(status)
+          let progressData: [String: Any] = [
+            "identifier": identifier,
+            "progressPercentage": progressPercentage,
+            "status": statusMessage,
+            "isCompleted": isCompleted
+          ]
+          self.success("firmwareUpdateProgress", data: progressData)
+          
+          // Handle completion
+          switch status {
+          case .fwUpdateCompletedSuccessfully:
+            if !resultSent {
+              resultSent = true
+              result(nil)
+            }
+          case .fwUpdateFailed(let details):
+            if !resultSent {
+              resultSent = true
+              result(FlutterError(
+                code: "Error updating firmware",
+                message: details,
+                details: nil))
+            }
+          case .fwUpdateNotAvailable(let details):
+            if !resultSent {
+              resultSent = true
+              result(FlutterError(
+                code: "Firmware update not available",
+                message: details,
+                details: nil))
+            }
+          default:
+            break
+          }
         },
         onError: { error in
-          result(
-            FlutterError(
-              code: "Error updating firmware",
-              message: error.localizedDescription,
-              details: nil))
+          if !resultSent {
+            result(
+              FlutterError(
+                code: "Error updating firmware",
+                message: error.localizedDescription,
+                details: nil))
+          }
         })
+  }
+  
+  private func mapFirmwareStatus(_ status: FirmwareUpdateStatus) -> (Int, String, Bool) {
+    switch status {
+    case .fetchingFwUpdatePackage(let details):
+      return (10, "Fetching firmware package: \(details)", false)
+    case .preparingDeviceForFwUpdate(let details):
+      return (30, "Preparing device: \(details)", false)
+    case .writingFwUpdatePackage(let details):
+      return (60, "Writing firmware: \(details)", false)
+    case .finalizingFwUpdate(let details):
+      return (90, "Finalizing update: \(details)", false)
+    case .fwUpdateCompletedSuccessfully(let details):
+      return (100, "Update completed: \(details)", true)
+    case .fwUpdateNotAvailable(let details):
+      return (0, "Update not available: \(details)", false)
+    case .fwUpdateFailed(let details):
+      return (0, "Update failed: \(details)", false)
+    }
   }
 
   func enableSdkMode(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -622,6 +698,11 @@ private func success(_ event: String, data: Any? = nil) {
   public func ftpFeatureReady(_ identifier: String) {
     // Do nothing
   }
+
+  // Note: The Polar SDK doesn't have a separate firmware update progress observer.
+  // Progress is reported through the FirmwareUpdateStatus Observable returned by updateFirmware()
+  // We would need to intercept those status updates and convert them to progress events.
+  // This is handled in the updateFirmware() method itself.
 
   func getAvailableOfflineRecordingDataTypes(
     _ call: FlutterMethodCall, _ result: @escaping FlutterResult
