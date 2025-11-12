@@ -261,7 +261,7 @@ void testMisc(String identifier, {required bool isVerity}) {
       );
     }
 
-    await polar.doFactoryReset(identifier, false);
+    await polar.doFactoryReset(identifier);
     await disconnect(identifier);
   });
 }
