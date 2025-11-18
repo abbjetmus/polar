@@ -115,3 +115,26 @@ class PpgOfflineRecording extends PolarOfflineRecordingData {
     );
   }
 }
+
+/// A class representing skin temperature offline recording data from a Polar device,
+/// extending the generic [PolarOfflineRecordingData].
+class SkinTemperatureOfflineRecording extends PolarOfflineRecordingData {
+  /// The skin temperature data.
+  final PolarTemperatureData data;
+
+  /// Constructor for [SkinTemperatureOfflineRecording].
+  SkinTemperatureOfflineRecording(
+      {required this.data, required super.startTime});
+
+  /// Factory method to create an instance from JSON.
+  factory SkinTemperatureOfflineRecording.fromJson(Map<String, dynamic> json) {
+    return SkinTemperatureOfflineRecording(
+      data: PolarTemperatureData.fromJson(json['data']),
+      startTime: Platform.isIOS
+          ? DateTime.fromMillisecondsSinceEpoch(json['startTime'])
+          : const MapToDateTimeConverter().fromJson(
+              json['startTime'],
+            ),
+    );
+  }
+}

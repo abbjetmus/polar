@@ -35,6 +35,7 @@ extension PolarDeviceDataType {
         case "magnetometer": return .magnetometer
         case "hr": return .hr
         case "temperature": return .temperature
+        case "skinTemperature": return .skinTemperature
         case "pressure": return .pressure
         default: return nil
         }

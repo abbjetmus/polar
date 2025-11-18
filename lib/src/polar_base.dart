@@ -753,6 +753,27 @@ class Polar {
     return PpgOfflineRecording.fromJson(data);
   }
 
+  /// Fetches a specific offline recording from a Polar device.
+  ///
+  /// - Parameters:
+  ///   - identifier: Polar device id or address.
+  ///   - entry: The entry representing the offline recording to fetch.
+  /// - Returns: Recording data in JSON format.
+  ///   - success: Returns the fetched recording data.
+  ///   - onError: Possible errors are returned as exceptions.
+  Future<SkinTemperatureOfflineRecording?> getOfflineSkinTemperatureRecord(
+    String identifier,
+    PolarOfflineRecordingEntry entry,
+  ) async {
+    final result = await _methodChannel.invokeMethod<String>(
+      'getOfflineRecord',
+      [identifier, jsonEncode(entry.toJson())],
+    );
+    if (result == null) return null;
+    final data = jsonDecode(result);
+    return SkinTemperatureOfflineRecording.fromJson(data);
+  }
+
   /// Removes a specific offline recording from a Polar device.
   ///
   /// - Parameters:

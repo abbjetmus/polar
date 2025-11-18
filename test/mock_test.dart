@@ -138,6 +138,20 @@ Future<dynamic> handleMethodCall(MethodCall call) async {
       return null;
     case 'getOfflinePpgRecord':
       return null;
+    case 'getOfflineSkinTemperatureRecord':
+      return offlineRecordings.isNotEmpty
+          ? SkinTemperatureOfflineRecording(
+              data: PolarTemperatureData(
+                samples: [
+                  PolarTemperatureSample(
+                    timeStamp: DateTime.now(),
+                    temperature: 0,
+                  ),
+                ],
+              ),
+              startTime: DateTime.now(),
+            )
+          : null;
     case 'getDiskSpace':
       return diskSpace;
     case 'removeOfflineRecord':
@@ -227,6 +241,15 @@ class StreamingHandler extends MockStreamHandler {
           ],
         );
       case PolarDataType.temperature:
+        data = PolarTemperatureData(
+          samples: [
+            PolarTemperatureSample(
+              timeStamp: DateTime.now(),
+              temperature: 0,
+            ),
+          ],
+        );
+      case PolarDataType.skinTemperature:
         data = PolarTemperatureData(
           samples: [
             PolarTemperatureSample(

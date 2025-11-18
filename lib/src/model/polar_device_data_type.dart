@@ -29,6 +29,9 @@ enum PolarDataType {
   /// Temperature
   temperature,
 
+  /// Skin Temperature
+  skinTemperature,
+
   /// Pressure
   pressure;
 

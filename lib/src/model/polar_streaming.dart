@@ -37,9 +37,9 @@ class PolarStreamingData<T> {
         return _fromJson(json, _$PolarMagnetometerSampleFromJson);
       case const (PolarPpiSample):
         return _fromJson(json, _$PolarPpiSampleFromJson);
-      case const (PolarTemperatureData):
+      case const (PolarTemperatureSample):
         return _fromJson(json, _$PolarTemperatureSampleFromJson);
-      case const (PolarPressureData):
+      case const (PolarPressureSample):
         return _fromJson(json, _$PolarPressureSampleFromJson);
       default:
         throw UnsupportedError('Unsupported type: $T');
@@ -64,9 +64,9 @@ class PolarStreamingData<T> {
         return _toJson(_$PolarMagnetometerSampleToJson);
       case const (PolarPpiSample):
         return _toJson(_$PolarPpiSampleToJson);
-      case const (PolarTemperatureData):
+      case const (PolarTemperatureSample):
         return _toJson(_$PolarTemperatureSampleToJson);
-      case const (PolarPressureData):
+      case const (PolarPressureSample):
         return _toJson(_$PolarPressureSampleToJson);
       default:
         throw UnsupportedError('Unsupported type: $T');
@@ -338,6 +338,13 @@ class PolarTemperatureSample {
     required this.timeStamp,
     required this.temperature,
   });
+
+  /// From json
+  factory PolarTemperatureSample.fromJson(Map<String, dynamic> json) =>
+      _$PolarTemperatureSampleFromJson(json);
+
+  /// To json
+  Map<String, dynamic> toJson() => _$PolarTemperatureSampleToJson(this);
 }
 
 /// Polar temperature data
@@ -358,6 +365,13 @@ class PolarPressureSample {
     required this.timeStamp,
     required this.pressure,
   });
+
+  /// From json
+  factory PolarPressureSample.fromJson(Map<String, dynamic> json) =>
+      _$PolarPressureSampleFromJson(json);
+
+  /// To json
+  Map<String, dynamic> toJson() => _$PolarPressureSampleToJson(this);
 }
 
 /// Polar pressure data
