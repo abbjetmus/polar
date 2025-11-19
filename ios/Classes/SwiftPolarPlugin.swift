@@ -625,7 +625,7 @@ private func success(_ event: String, data: Any? = nil) {
     }
     let feature = PolarDeviceDataType.allCases[index]
 
-    _ = api.requestStreamSettings(identifier, feature: feature)
+    _ = api.requestOfflineRecordingSettings(identifier, feature: feature)
       .subscribe(
         onSuccess: { settings in
           if let encodedData = jsonEncode(PolarSensorSettingCodable(settings)) {
@@ -633,14 +633,14 @@ private func success(_ event: String, data: Any? = nil) {
           } else {
             result(
               FlutterError(
-                code: "ENCODING_ERROR", message: "Failed to encode stream settings", details: nil))
+                code: "ENCODING_ERROR", message: "Failed to encode offline recording settings", details: nil))
           }
         },
         onFailure: { error in
           result(
             FlutterError(
               code: "REQUEST_ERROR",
-              message: "Error requesting stream settings: \(error.localizedDescription)",
+              message: "Error requesting offline recording settings: \(error.localizedDescription)",
               details: nil))
         })
   }
