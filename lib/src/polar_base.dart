@@ -896,7 +896,7 @@ class Polar {
       'deleteStoredDeviceData',
       [
         identifier,
-        dataType.toInt(),
+        dataType.toJson(),
         DateFormat('yyyy-MM-dd').format(until),
       ],
     );

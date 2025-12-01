@@ -861,7 +861,24 @@ class PolarPlugin :
     private fun deleteStoredDeviceData(call: MethodCall, result: Result) {
         val arguments = call.arguments as List<*>
         val identifier = arguments[0] as String
-        val dataType = gson.fromJson(arguments[1] as String, PolarBleApi.PolarStoredDataType::class.java)
+        
+        // Map Dart enum name to Kotlin enum
+        // Dart: activity, autoSample, dailySummary, nightlyRecovery, sdlogs, sleep, sleepScore, skinContactChanges, skintemp
+        // Kotlin: ACTIVITY, AUTO_SAMPLE, DAILY_SUMMARY, NIGHTLY_RECOVERY, SDLOGS, SLEEP, SLEEP_SCORE, SKIN_CONTACT_CHANGES, SKIN_TEMP
+        val dataTypeName = arguments[1] as String
+        val dataType: PolarBleApi.PolarStoredDataType = when (dataTypeName) {
+            "activity" -> PolarBleApi.PolarStoredDataType.ACTIVITY
+            "autoSample" -> PolarBleApi.PolarStoredDataType.AUTO_SAMPLE
+            "dailySummary" -> PolarBleApi.PolarStoredDataType.DAILY_SUMMARY
+            "nightlyRecovery" -> PolarBleApi.PolarStoredDataType.NIGHTLY_RECOVERY
+            "sdlogs" -> PolarBleApi.PolarStoredDataType.SDLOGS
+            "sleep" -> PolarBleApi.PolarStoredDataType.SLEEP
+            "sleepScore" -> PolarBleApi.PolarStoredDataType.SLEEP_SCORE
+            "skinContactChanges" -> PolarBleApi.PolarStoredDataType.SKIN_CONTACT_CHANGES
+            "skintemp" -> PolarBleApi.PolarStoredDataType.SKIN_TEMP
+            else -> throw IllegalArgumentException("Invalid PolarStoredDataType: $dataTypeName")
+        }
+        
         val until = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(arguments[2] as String)
             .toInstant()
             .atZone(ZoneId.systemDefault())

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 /// Represents the types of stored data that can be deleted from a Polar device.
 /// This corresponds to the iOS StoredDataType enum.
 enum PolarStoredDataTypeEnum {
@@ -31,25 +33,14 @@ enum PolarStoredDataTypeEnum {
   /// Skin temperature data
   skintemp;
 
-  /// Converts this enum to its index for use with the native API.
-  int toInt() => index;
-
-  /// Creates a [PolarStoredDataTypeEnum] from an integer index.
-  static PolarStoredDataTypeEnum fromInt(int index) {
-    if (index < 0 || index >= PolarStoredDataTypeEnum.values.length) {
-      throw Exception('Invalid PolarStoredDataTypeEnum index: $index');
+  /// Converts this enum to JSON format for use with the native API.
+  /// - iOS: Returns the enum index as an integer
+  /// - Android: Returns the enum name as a string
+  dynamic toJson() {
+    if (Platform.isIOS) {
+      return index;
+    } else {
+      return name;
     }
-    return PolarStoredDataTypeEnum.values[index];
-  }
-
-  /// Converts this enum to a JSON string.
-  String toJson() => name;
-
-  /// Creates a [PolarStoredDataTypeEnum] from a JSON string.
-  static PolarStoredDataTypeEnum fromJson(String json) {
-    return PolarStoredDataTypeEnum.values.firstWhere(
-      (e) => e.name == json,
-      orElse: () => throw Exception('Unknown PolarStoredDataTypeEnum: $json'),
-    );
   }
 }
