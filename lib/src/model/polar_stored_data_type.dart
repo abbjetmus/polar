@@ -1,37 +1,31 @@
 /// Represents the types of data that can be stored on a Polar device.
 enum PolarStoredDataType {
-  /// Heart rate data
-  hr,
+  /// Activity data
+  activity,
 
-  /// ECG data
-  ecg,
+  /// Auto sample data
+  autoSample,
 
-  /// Accelerometer data
-  acc,
+  /// Daily summary data
+  dailySummary,
 
-  /// PPG data
-  ppg,
+  /// Nightly recovery data
+  nightlyRecovery,
 
-  /// PPI data
-  ppi,
+  /// SD logs data
+  sdlogs,
 
-  /// Gyroscope data
-  gyro,
-
-  /// Magnetometer data
-  magnetometer,
-
-  /// Temperature data
-  temperature,
-
-  /// Pressure data
-  pressure,
-
-  /// Location data
-  location,
+  /// Skin contact changes data
+  skinContactChanges,
 
   /// Skin temperature data
-  skinTemperature;
+  skintemp,
+
+  /// Sleep data
+  sleep,
+
+  /// Sleep score data
+  sleepScore;
 
   /// Converts this enum to a JSON string.
   String toJson() => name;

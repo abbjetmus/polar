@@ -18,6 +18,7 @@ import com.google.gson.JsonSerializer
 import com.polar.androidcommunications.api.ble.model.DisInfo
 import com.polar.androidcommunications.api.ble.model.gatt.client.ChargeState
 import com.polar.androidcommunications.api.ble.model.gatt.client.PowerSourcesState
+import com.polar.androidcommunications.api.ble.exceptions.BleDisconnected
 import com.polar.sdk.api.PolarBleApi
 import com.polar.sdk.api.PolarBleApi.PolarBleSdkFeature
 import com.polar.sdk.api.PolarBleApi.PolarDeviceDataType
@@ -25,6 +26,8 @@ import com.polar.sdk.api.PolarBleApiCallbackProvider
 import com.polar.sdk.api.PolarBleApiDefaultImpl
 import com.polar.sdk.api.PolarH10OfflineExerciseApi.RecordingInterval
 import com.polar.sdk.api.PolarH10OfflineExerciseApi.SampleType
+import com.polar.sdk.api.model.CheckFirmwareUpdateStatus
+import com.polar.sdk.api.model.FirmwareUpdateStatus
 import com.polar.sdk.api.model.LedConfig
 import com.polar.sdk.api.model.PolarDeviceInfo
 import com.polar.sdk.api.model.PolarExerciseEntry
@@ -143,13 +146,31 @@ class PolarPlugin :
 
         when (call.method) {
             "connectToDevice" -> {
-                wrapper.api.connectToDevice(call.arguments as String)
-                result.success(null)
+                try {
+                    val identifier = call.arguments as String
+                    android.util.Log.d("PolarPlugin", "connectToDevice: identifier=$identifier")
+                    wrapper.api.connectToDevice(identifier)
+                    result.success(null)
+                } catch (e: Exception) {
+                    android.util.Log.e("PolarPlugin", "connectToDevice error: ${e.message}", e)
+                    runOnUiThread {
+                        result.error("CONNECT_ERROR", e.message ?: "Unknown error", null)
+                    }
+                }
             }
 
             "disconnectFromDevice" -> {
-                wrapper.api.disconnectFromDevice(call.arguments as String)
-                result.success(null)
+                try {
+                    val identifier = call.arguments as String
+                    android.util.Log.d("PolarPlugin", "disconnectFromDevice: identifier=$identifier")
+                    wrapper.api.disconnectFromDevice(identifier)
+                    result.success(null)
+                } catch (e: Exception) {
+                    android.util.Log.e("PolarPlugin", "disconnectFromDevice error: ${e.message}", e)
+                    runOnUiThread {
+                        result.error("DISCONNECT_ERROR", e.message ?: "Unknown error", null)
+                    }
+                }
             }
 
             "getAvailableOnlineStreamDataTypes" -> getAvailableOnlineStreamDataTypes(call, result)
@@ -191,6 +212,8 @@ class PolarPlugin :
             "getActivitySampleData" -> getActivitySampleData(call, result)
             "sendInitializationAndStartSyncNotifications" -> sendInitializationAndStartSyncNotifications(call, result)
             "sendTerminateAndStopSyncNotifications" -> sendTerminateAndStopSyncNotifications(call, result)
+            "checkFirmwareUpdate" -> checkFirmwareUpdate(call, result)
+            "updateFirmware" -> updateFirmware(call, result)
             else -> result.notImplemented()
         }
     }
@@ -200,11 +223,15 @@ class PolarPlugin :
         events: EventSink,
     ) {
         initApi()
-        wrapper.addSink(arguments as Int, events)
+        val id = arguments as Int
+        android.util.Log.d("PolarPlugin", "onListen: id=$id, registering event sink")
+        wrapper.addSink(id, events)
     }
 
     override fun onCancel(arguments: Any?) {
-        wrapper.removeSink(arguments as Int)
+        val id = arguments as Int
+        android.util.Log.d("PolarPlugin", "onCancel: id=$id, canceling event sink")
+        wrapper.removeSink(id)
     }
 
     private val searchHandler =
@@ -290,7 +317,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun requestStreamSettings(
@@ -310,7 +337,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun startRecording(
@@ -332,7 +359,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun stopRecording(
@@ -350,7 +377,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun requestRecordingStatus(
@@ -368,7 +395,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun listExercises(
@@ -389,7 +416,7 @@ class PolarPlugin :
             }, {
                 result.success(exercises)
             })
-            .discard()
+            
     }
 
     private fun fetchExercise(
@@ -409,7 +436,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun removeExercise(
@@ -429,7 +456,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun setLedConfig(
@@ -449,7 +476,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun doFactoryReset(
@@ -467,7 +494,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun doRestart(
@@ -484,7 +511,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun enableSdkMode(
@@ -501,7 +528,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun disableSdkMode(
@@ -518,7 +545,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun isSdkModeEnabled(
@@ -535,7 +562,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun getAvailableOfflineRecordingDataTypes(call: MethodCall, result: Result) {
@@ -550,7 +577,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun requestOfflineRecordingSettings(call: MethodCall, result: Result) {
@@ -567,7 +594,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun startOfflineRecording(call: MethodCall, result: Result) {
@@ -585,7 +612,7 @@ class PolarPlugin :
                     result.error("ERROR_STARTING_RECORDING", it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun stopOfflineRecording(call: MethodCall, result: Result) {
@@ -602,7 +629,7 @@ class PolarPlugin :
                     result.error("ERROR_STOPPING_RECORDING", it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun getOfflineRecordingStatus(call: MethodCall, result: Result) {
@@ -619,7 +646,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun listOfflineRecordings(call: MethodCall, result: Result) {
@@ -637,7 +664,7 @@ class PolarPlugin :
             }, {
                 result.success(recordings)
             })
-            .discard()
+            
     }
 
     private fun getOfflineRecord(call: MethodCall, result: Result) {
@@ -654,7 +681,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun removeOfflineRecord(call: MethodCall, result: Result) {
@@ -671,7 +698,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun getDiskSpace(call: MethodCall, result: Result) {
@@ -689,7 +716,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun getLocalTime(call: MethodCall, result: Result) {
@@ -724,7 +751,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun setLocalTime(call: MethodCall, result: Result) {
@@ -750,7 +777,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun doFirstTimeUse(call: MethodCall, result: Result) {
@@ -836,7 +863,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun isFtuDone(call: MethodCall, result: Result) {
@@ -854,7 +881,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     @TargetApi(Build.VERSION_CODES.O)
@@ -893,7 +920,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     @TargetApi(Build.VERSION_CODES.O)
@@ -918,7 +945,7 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
+            
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
@@ -1012,7 +1039,7 @@ class PolarPlugin :
                         result.error("GET_STEPS_ERROR", "Error fetching steps data: ${error.message}", null) 
                     }
                 })
-                .discard()
+                
         } catch (e: Exception) {
             android.util.Log.e("PolarPlugin", "Exception in getSteps", e)
             result.error("UNEXPECTED_ERROR", "Unexpected error in getSteps: ${e.message}", null)
@@ -1109,7 +1136,7 @@ class PolarPlugin :
                         result.error("GET_DISTANCE_ERROR", "Error fetching distance data: ${error.message}", null) 
                     }
                 })
-                .discard()
+                
         } catch (e: Exception) {
             android.util.Log.e("PolarPlugin", "Exception in getDistance", e)
             result.error("UNEXPECTED_ERROR", "Unexpected error in getDistance: ${e.message}", null)
@@ -1213,7 +1240,7 @@ class PolarPlugin :
                         result.error("GET_ACTIVE_TIME_ERROR", "Error fetching active time data: ${error.message}", null) 
                     }
                 })
-                .discard()
+                
         } catch (e: Exception) {
             android.util.Log.e("PolarPlugin", "Exception in getActiveTime", e)
             result.error("UNEXPECTED_ERROR", "Unexpected error in getActiveTime: ${e.message}", null)
@@ -1350,7 +1377,7 @@ class PolarPlugin :
                         result.error("GET_ACTIVITY_SAMPLE_DATA_ERROR", "Error fetching activity sample data: ${error.message}", null) 
                     }
                 })
-                .discard()
+                
         } catch (e: Exception) {
             android.util.Log.e("PolarPlugin", "Exception in getActivitySampleData", e)
             result.error("UNEXPECTED_ERROR", "Unexpected error in getActivitySampleData: ${e.message}", null)
@@ -1372,7 +1399,7 @@ class PolarPlugin :
                     result.error(error.toString(), error.message, null)
                 }
             })
-            .discard()
+            
     }
 
     private fun sendTerminateAndStopSyncNotifications(call: MethodCall, result: Result) {
@@ -1392,6 +1419,105 @@ class PolarPlugin :
             })
             .discard()
     }
+
+    private fun checkFirmwareUpdate(call: MethodCall, result: Result) {
+        val identifier = call.arguments as? String ?: run {
+            result.error("ERROR_INVALID_ARGUMENT", "Expected a single String argument", null)
+            return
+        }
+
+        wrapper.api
+            .checkFirmwareUpdate(identifier)
+            .subscribe({
+                val json = gson.toJson(checkFirmwareUpdateStatusToMap(it))
+                wrapper.success("firmwareUpdateCheckStatusReceived", listOf(identifier, json))
+                runOnUiThread { result.success(null) }
+            }, {
+                runOnUiThread {
+                    result.error(it.toString(), it.message, null)
+                }
+            })
+            .discard()
+    }
+
+    private fun updateFirmware(call: MethodCall, result: Result) {
+        val identifier: String
+        val firmwareUrl: String?
+
+        if (call.arguments is String) {
+            identifier = call.arguments as String
+            firmwareUrl = null
+        } else if (call.arguments is List<*>) {
+            val args = call.arguments as List<*>
+            identifier = args[0] as String
+            firmwareUrl = args[1] as String
+        } else {
+            result.error("ERROR_INVALID_ARGUMENT", "Expected String or List arguments", null)
+            return
+        }
+
+        val flowable = if (firmwareUrl != null) {
+            wrapper.api.updateFirmware(identifier, firmwareUrl)
+        } else {
+            wrapper.api.updateFirmware(identifier)
+        }
+
+        var lastStatus: FirmwareUpdateStatus? = null
+
+        flowable
+            .doOnNext { lastStatus = it }
+            .subscribe({
+                val json = gson.toJson(firmwareUpdateStatusToMap(it))
+                wrapper.success("firmwareUpdateStatusReceived", listOf(identifier, json))
+            }, { error ->
+                // During firmware update, the device reboots which causes a BleDisconnected.
+                // If we were in the finalizing stage, this is expected and means success.
+                if (error is BleDisconnected && 
+                    (lastStatus is FirmwareUpdateStatus.FinalizingFwUpdate || 
+                     lastStatus is FirmwareUpdateStatus.FwUpdateCompletedSuccessfully)) {
+                    // Emit a completed status before finishing
+                    val completedJson = gson.toJson(mapOf("type" to "completed", "details" to "Firmware update completed, device rebooting"))
+                    wrapper.success("firmwareUpdateStatusReceived", listOf(identifier, completedJson))
+                    runOnUiThread { result.success(null) }
+                } else {
+                    runOnUiThread {
+                        result.error(error.toString(), error.message, null)
+                    }
+                }
+            }, {
+                runOnUiThread { result.success(null) }
+            })
+            .discard()
+    }
+
+    private fun checkFirmwareUpdateStatusToMap(status: CheckFirmwareUpdateStatus): Map<String, Any?> {
+        return when (status) {
+            is CheckFirmwareUpdateStatus.CheckFwUpdateAvailable -> mapOf(
+                "type" to "available",
+                "version" to status.version
+            )
+            is CheckFirmwareUpdateStatus.CheckFwUpdateNotAvailable -> mapOf(
+                "type" to "notAvailable",
+                "details" to status.details
+            )
+            is CheckFirmwareUpdateStatus.CheckFwUpdateFailed -> mapOf(
+                "type" to "failed",
+                "details" to status.details
+            )
+        }
+    }
+
+    private fun firmwareUpdateStatusToMap(status: FirmwareUpdateStatus): Map<String, Any?> {
+        return when (status) {
+            is FirmwareUpdateStatus.FetchingFwUpdatePackage -> mapOf("type" to "fetching", "details" to status.details)
+            is FirmwareUpdateStatus.PreparingDeviceForFwUpdate -> mapOf("type" to "preparing", "details" to status.details)
+            is FirmwareUpdateStatus.WritingFwUpdatePackage -> mapOf("type" to "writing", "details" to status.details)
+            is FirmwareUpdateStatus.FinalizingFwUpdate -> mapOf("type" to "finalizing", "details" to status.details)
+            is FirmwareUpdateStatus.FwUpdateCompletedSuccessfully -> mapOf("type" to "completed", "details" to status.details)
+            is FirmwareUpdateStatus.FwUpdateNotAvailable -> mapOf("type" to "notAvailable", "details" to status.details)
+            is FirmwareUpdateStatus.FwUpdateFailed -> mapOf("type" to "failed", "details" to status.details)
+        }
+    }
     }
 
 class PolarWrapper(
@@ -1404,6 +1530,7 @@ class PolarWrapper(
     private val sinks: MutableMap<Int, EventSink> = mutableMapOf(),
 ) : PolarBleApiCallbackProvider {
     init {
+        android.util.Log.d("PolarPlugin", "PolarWrapper init: setting API callback")
         api.setApiCallback(this)
     }
 
@@ -1412,17 +1539,25 @@ class PolarWrapper(
         sink: EventSink,
     ) {
         sinks[id] = sink
+        android.util.Log.d("PolarPlugin", "addSink: id=$id, total sinks=${sinks.size}")
     }
 
     fun removeSink(id: Int) {
         sinks.remove(id)
+        android.util.Log.d("PolarPlugin", "removeSink: id=$id, remaining sinks=${sinks.size}")
     }
 
-    private fun success(
+    internal fun success(
         event: String,
         data: Any?,
     ) {
-        runOnUiThread { sinks.values.forEach { it.success(mapOf("event" to event, "data" to data)) } }
+        android.util.Log.d("PolarPlugin", "success: event=$event, sinks.size=${sinks.size}")
+        runOnUiThread {
+            if (sinks.isEmpty()) {
+                android.util.Log.w("PolarPlugin", "success: No sinks registered for event=$event")
+            }
+            sinks.values.forEach { it.success(mapOf("event" to event, "data" to data)) }
+        }
     }
 
     fun shutDown() {
@@ -1443,18 +1578,22 @@ class PolarWrapper(
         identifier: String,
         feature: PolarBleSdkFeature,
     ) {
+        android.util.Log.d("PolarPlugin", "bleSdkFeatureReady: identifier=$identifier, feature=${feature.name}")
         success("sdkFeatureReady", listOf(identifier, feature.name))
     }
 
     override fun deviceConnected(polarDeviceInfo: PolarDeviceInfo) {
+        android.util.Log.d("PolarPlugin", "deviceConnected: deviceId=${polarDeviceInfo.deviceId}")
         success("deviceConnected", gson.toJson(polarDeviceInfo))
     }
 
     override fun deviceConnecting(polarDeviceInfo: PolarDeviceInfo) {
+        android.util.Log.d("PolarPlugin", "deviceConnecting: deviceId=${polarDeviceInfo.deviceId}")
         success("deviceConnecting", gson.toJson(polarDeviceInfo))
     }
 
     override fun deviceDisconnected(polarDeviceInfo: PolarDeviceInfo) {
+        android.util.Log.d("PolarPlugin", "deviceDisconnected: deviceId=${polarDeviceInfo.deviceId}")
         success(
             "deviceDisconnected",
             // The second argument is the `pairingError` field on iOS

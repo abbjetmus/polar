@@ -22,4 +22,4 @@ export 'src/model/polar_activity_sample_data.dart';
 export 'src/model/polar_activity_samples_data.dart';
 export 'src/model/polar_activity_info.dart';
 export 'src/model/polar_stored_data_type.dart';
-export 'src/model/polar_stored_data_type_enum.dart';
+export 'src/model/polar_firmware_update_status.dart';

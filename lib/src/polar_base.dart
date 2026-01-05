@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -10,6 +11,7 @@ import 'package:polar/polar.dart';
 import 'package:polar/src/model/convert.dart';
 import 'package:polar/src/model/polar_charge_state.dart';
 import 'package:polar/src/model/polar_event_wrapper.dart';
+import 'package:polar/src/model/polar_firmware_update_status.dart';
 import 'package:polar/src/model/polar_offline_recording_data.dart';
 import 'package:intl/intl.dart';
 
@@ -36,7 +38,10 @@ class Polar {
   late final _eventStream = _eventChannel
       .receiveBroadcastStream(identityHashCode(this))
       .map((e) => (e as Map).cast<String, dynamic>())
-      .map(PolarEventWrapper.fromJson);
+      .map(PolarEventWrapper.fromJson)
+      .handleError((error) {
+    debugPrint('Polar event stream error: $error');
+  });
 
   /// helper to ask ble power state
   Stream<bool> get blePowerState => _eventStream
@@ -103,6 +108,47 @@ class Polar {
             ),
           );
 
+  /// Firmware update check status received from device.
+  Stream<PolarFirmwareUpdateCheckStatusEvent> get firmwareUpdateCheckStatus =>
+      _eventStream
+          .where((e) => e.event == PolarEvent.firmwareUpdateCheckStatusReceived)
+          .map(
+        (e) {
+          final decoded = jsonDecode(e.data[1]);
+          if (decoded is! Map<String, dynamic>) {
+            debugPrint(
+                'Polar: firmwareUpdateCheckStatus received invalid data: $decoded (type: ${decoded.runtimeType})');
+            // Fallback or throw with more info
+            throw FormatException(
+                'Expected Map<String, dynamic> but got ${decoded.runtimeType}');
+          }
+          return PolarFirmwareUpdateCheckStatusEvent(
+            e.data[0],
+            PolarFirmwareUpdateCheckStatus.fromJson(decoded),
+          );
+        },
+      );
+
+  /// Firmware update status received from device.
+  Stream<PolarFirmwareUpdateStatusEvent> get firmwareUpdateStatus =>
+      _eventStream
+          .where((e) => e.event == PolarEvent.firmwareUpdateStatusReceived)
+          .map(
+        (e) {
+          final decoded = jsonDecode(e.data[1]);
+          if (decoded is! Map<String, dynamic>) {
+            debugPrint(
+                'Polar: firmwareUpdateStatus received invalid data: $decoded (type: ${decoded.runtimeType})');
+            throw FormatException(
+                'Expected Map<String, dynamic> but got ${decoded.runtimeType}');
+          }
+          return PolarFirmwareUpdateStatusEvent(
+            e.data[0],
+            PolarFirmwareUpdateStatus.fromJson(decoded),
+          );
+        },
+      );
+
   /// Start searching for Polar device(s)
   ///
   /// - Parameter onNext: Invoked once for each device
@@ -127,7 +173,12 @@ class Polar {
       await this.requestPermissions();
     }
 
-    unawaited(_methodChannel.invokeMethod('connectToDevice', identifier));
+    try {
+      await _methodChannel.invokeMethod('connectToDevice', identifier);
+    } catch (e) {
+      debugPrint('connectToDevice error: $e');
+      rethrow;
+    }
   }
 
   /// Request the necessary permissions on Android
@@ -889,7 +940,7 @@ class Polar {
   ///   - onError: Possible errors are returned as exceptions
   Future<void> deleteStoredDeviceData(
     String identifier,
-    PolarStoredDataTypeEnum dataType,
+    PolarStoredDataType dataType,
     DateTime until,
   ) async {
     await _methodChannel.invokeMethod<void>(
@@ -1189,5 +1240,47 @@ class Polar {
       'sendTerminateAndStopSyncNotifications',
       identifier,
     );
+  }
+
+  /// Check if firmware update is available for the device.
+  ///
+  /// - Parameters:
+  ///   - identifier: Polar device ID or BT address
+  /// - Returns: Stream of firmware update check status events
+  ///   - onNext: Firmware update check status
+  Stream<PolarFirmwareUpdateCheckStatus> checkFirmwareUpdate(
+      String identifier) {
+    _methodChannel.invokeMethod('checkFirmwareUpdate', identifier);
+    return _eventStream
+        .where((e) =>
+            e.event == PolarEvent.firmwareUpdateCheckStatusReceived &&
+            e.data[0] == identifier)
+        .map((e) =>
+            PolarFirmwareUpdateCheckStatus.fromJson(jsonDecode(e.data[1])));
+  }
+
+  /// Update firmware on the device.
+  ///
+  /// Note: Performing firmware update with Polar devices will erase all data
+  /// inside the device, including SDK offline recordings.
+  ///
+  /// - Parameters:
+  ///   - identifier: Polar device ID or BT address
+  ///   - firmwareUrl: Optional URL to firmware package. If null, latest firmware will be fetched automatically
+  /// - Returns: Stream of firmware update status events
+  ///   - onNext: Firmware update status
+  Stream<PolarFirmwareUpdateStatus> updateFirmware(
+    String identifier, {
+    String? firmwareUrl,
+  }) {
+    _methodChannel.invokeMethod(
+      'updateFirmware',
+      firmwareUrl != null ? [identifier, firmwareUrl] : identifier,
+    );
+    return _eventStream
+        .where((e) =>
+            e.event == PolarEvent.firmwareUpdateStatusReceived &&
+            e.data[0] == identifier)
+        .map((e) => PolarFirmwareUpdateStatus.fromJson(jsonDecode(e.data[1])));
   }
 }
