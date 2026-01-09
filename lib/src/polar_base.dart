@@ -114,13 +114,18 @@ class Polar {
           .where((e) => e.event == PolarEvent.firmwareUpdateCheckStatusReceived)
           .map(
         (e) {
-          final decoded = jsonDecode(e.data[1]);
-          if (decoded is! Map<String, dynamic>) {
+          // On iOS, e.data[1] is already a Map, on Android it's a String that needs decoding
+          final data = e.data[1];
+          Map<String, dynamic> decoded;
+          if (data is Map) {
+            decoded = Map<String, dynamic>.from(data);
+          } else if (data is String) {
+            decoded = jsonDecode(data) as Map<String, dynamic>;
+          } else {
             debugPrint(
-                'Polar: firmwareUpdateCheckStatus received invalid data: $decoded (type: ${decoded.runtimeType})');
-            // Fallback or throw with more info
+                'Polar: firmwareUpdateCheckStatus received invalid data type: ${data.runtimeType}');
             throw FormatException(
-                'Expected Map<String, dynamic> but got ${decoded.runtimeType}');
+                'Expected Map or String but got ${data.runtimeType}');
           }
           return PolarFirmwareUpdateCheckStatusEvent(
             e.data[0],
@@ -135,12 +140,18 @@ class Polar {
           .where((e) => e.event == PolarEvent.firmwareUpdateStatusReceived)
           .map(
         (e) {
-          final decoded = jsonDecode(e.data[1]);
-          if (decoded is! Map<String, dynamic>) {
+          // On iOS, e.data[1] is already a Map, on Android it's a String that needs decoding
+          final data = e.data[1];
+          Map<String, dynamic> decoded;
+          if (data is Map) {
+            decoded = Map<String, dynamic>.from(data);
+          } else if (data is String) {
+            decoded = jsonDecode(data) as Map<String, dynamic>;
+          } else {
             debugPrint(
-                'Polar: firmwareUpdateStatus received invalid data: $decoded (type: ${decoded.runtimeType})');
+                'Polar: firmwareUpdateStatus received invalid data type: ${data.runtimeType}');
             throw FormatException(
-                'Expected Map<String, dynamic> but got ${decoded.runtimeType}');
+                'Expected Map or String but got ${data.runtimeType}');
           }
           return PolarFirmwareUpdateStatusEvent(
             e.data[0],
@@ -1255,8 +1266,22 @@ class Polar {
         .where((e) =>
             e.event == PolarEvent.firmwareUpdateCheckStatusReceived &&
             e.data[0] == identifier)
-        .map((e) =>
-            PolarFirmwareUpdateCheckStatus.fromJson(jsonDecode(e.data[1])));
+        .map((e) {
+      // On iOS, e.data[1] is already a Map, on Android it's a String that needs decoding
+      final data = e.data[1];
+      Map<String, dynamic> decoded;
+      if (data is Map) {
+        decoded = Map<String, dynamic>.from(data);
+      } else if (data is String) {
+        decoded = jsonDecode(data) as Map<String, dynamic>;
+      } else {
+        debugPrint(
+            'Polar: checkFirmwareUpdate received invalid data type: ${data.runtimeType}');
+        throw FormatException(
+            'Expected Map or String but got ${data.runtimeType}');
+      }
+      return PolarFirmwareUpdateCheckStatus.fromJson(decoded);
+    });
   }
 
   /// Update firmware on the device.
@@ -1281,6 +1306,21 @@ class Polar {
         .where((e) =>
             e.event == PolarEvent.firmwareUpdateStatusReceived &&
             e.data[0] == identifier)
-        .map((e) => PolarFirmwareUpdateStatus.fromJson(jsonDecode(e.data[1])));
+        .map((e) {
+      // On iOS, e.data[1] is already a Map, on Android it's a String that needs decoding
+      final data = e.data[1];
+      Map<String, dynamic> decoded;
+      if (data is Map) {
+        decoded = Map<String, dynamic>.from(data);
+      } else if (data is String) {
+        decoded = jsonDecode(data) as Map<String, dynamic>;
+      } else {
+        debugPrint(
+            'Polar: updateFirmware received invalid data type: ${data.runtimeType}');
+        throw FormatException(
+            'Expected Map or String but got ${data.runtimeType}');
+      }
+      return PolarFirmwareUpdateStatus.fromJson(decoded);
+    });
   }
 }
