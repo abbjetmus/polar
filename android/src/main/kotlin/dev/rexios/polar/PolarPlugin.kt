@@ -890,10 +890,11 @@ class PolarPlugin :
         val identifier = arguments[0] as String
         
         // Map Dart enum name to Kotlin enum
-        // Dart: activity, autoSample, dailySummary, nightlyRecovery, sdlogs, sleep, sleepScore, skinContactChanges, skintemp
+        // Dart: undefined, activity, autoSample, dailySummary, nightlyRecovery, sdlogs, sleep, sleepScore, skinContactChanges, skintemp
         // Kotlin: ACTIVITY, AUTO_SAMPLE, DAILY_SUMMARY, NIGHTLY_RECOVERY, SDLOGS, SLEEP, SLEEP_SCORE, SKIN_CONTACT_CHANGES, SKIN_TEMP
         val dataTypeName = arguments[1] as String
         val dataType: PolarBleApi.PolarStoredDataType = when (dataTypeName) {
+            "undefined" -> throw IllegalArgumentException("Cannot delete undefined data type")
             "activity" -> PolarBleApi.PolarStoredDataType.ACTIVITY
             "autoSample" -> PolarBleApi.PolarStoredDataType.AUTO_SAMPLE
             "dailySummary" -> PolarBleApi.PolarStoredDataType.DAILY_SUMMARY
