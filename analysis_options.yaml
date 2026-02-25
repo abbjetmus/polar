@@ -1,1 +1,4 @@
 include: package:rexios_lints/flutter/package.yaml
+analyzer:
+  errors:
+    require_trailing_commas: ignore
