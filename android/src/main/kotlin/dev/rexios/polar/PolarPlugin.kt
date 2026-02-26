@@ -729,15 +729,8 @@ class PolarPlugin :
             .getLocalTime(identifier)
             .subscribe({ deviceTime ->
                 try {
-                    // Format the device time using SimpleDateFormat
-                    val dateFormat = java.text.SimpleDateFormat(
-                        "yyyy-MM-dd'T'HH:mm:ssXXX",
-                        java.util.Locale.getDefault()
-                    )
-                    dateFormat.timeZone = deviceTime.timeZone
-                    val timeString = dateFormat.format(deviceTime.time)
+                    val timeString = deviceTime.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
 
-                    // Return the formatted date as a string
                     runOnUiThread {
                         result.success(timeString)
                     }
@@ -759,17 +752,12 @@ class PolarPlugin :
         val identifier = arguments[0] as String
         val timestamp = arguments[1] as Double
 
-        // Convert the timestamp to a Date object
-        val date =
-            java.util.Date((timestamp * 1000).toLong()) // Multiply by 1000 to convert seconds to milliseconds
+        // Convert the timestamp to LocalDateTime
+        val instant = java.time.Instant.ofEpochMilli((timestamp * 1000).toLong())
+        val localDateTime = java.time.LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
 
-        // Convert Date to Calendar
-        val calendar = java.util.Calendar.getInstance()
-        calendar.time = date
-
-        // Now, call the API with Calendar
         wrapper.api
-            .setLocalTime(identifier, calendar)
+            .setLocalTime(identifier, localDateTime)
             .subscribe({
                 runOnUiThread { result.success(null) }
             }, {
@@ -821,7 +809,7 @@ class PolarPlugin :
         }
 
         // Parse birth date
-        val birthDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(birthDateString)
+        val birthDate = java.time.LocalDate.parse(birthDateString)
 
         // Map gender string to PolarFirstTimeUseConfig.Gender enum
         val genderEnum = when (gender) {
