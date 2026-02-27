@@ -156,6 +156,32 @@ class PolarDataTypeConverter implements JsonConverter<PolarDataType, dynamic> {
   }
 }
 
+/// Converts a date that may come as either a unix timestamp (num) or a map
+/// with time components to a [DateTime].
+///
+/// This handles the change in Polar SDK 6.15.0 where
+/// `PolarOfflineRecordingEntry.date` changed from `java.util.Date` (serialized
+/// as milliseconds since epoch) to `java.time.LocalDateTime` (which Gson
+/// serializes as a map if no custom serializer is registered).
+class FlexibleDateTimeConverter extends JsonConverter<DateTime, dynamic> {
+  /// Constructor
+  const FlexibleDateTimeConverter();
+
+  @override
+  DateTime fromJson(dynamic json) {
+    if (json is num) {
+      return DateTime.fromMillisecondsSinceEpoch(json.toInt());
+    } else if (json is Map<String, dynamic>) {
+      return const MapToDateTimeConverter().fromJson(json);
+    }
+    throw ArgumentError('Unexpected date format: ${json.runtimeType}');
+  }
+
+  @override
+  dynamic toJson(DateTime object) =>
+      const UnixTimeConverter().toJson(object);
+}
+
 /// Converts a map with time components to and from [DateTime].
 class MapToDateTimeConverter
     implements JsonConverter<DateTime, Map<String, dynamic>> {

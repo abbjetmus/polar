@@ -52,7 +52,9 @@ import java.lang.reflect.Type
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
@@ -74,11 +76,31 @@ object DateSerializer : JsonDeserializer<Date>, JsonSerializer<Date> {
     ): JsonElement = JsonPrimitive(src?.time)
 }
 
+object LocalDateTimeSerializer : JsonDeserializer<LocalDateTime>, JsonSerializer<LocalDateTime> {
+    override fun deserialize(
+        json: JsonElement?,
+        typeOfT: Type?,
+        context: JsonDeserializationContext?,
+    ): LocalDateTime {
+        val millis = json?.asJsonPrimitive?.asLong ?: 0
+        return LocalDateTime.ofEpochSecond(millis / 1000, ((millis % 1000) * 1_000_000).toInt(), ZoneOffset.UTC)
+    }
+
+    override fun serialize(
+        src: LocalDateTime?,
+        typeOfSrc: Type?,
+        context: JsonSerializationContext?,
+    ): JsonElement = JsonPrimitive(src?.toInstant(ZoneOffset.UTC)?.toEpochMilli())
+}
+
 private fun runOnUiThread(runnable: () -> Unit) {
     Handler(Looper.getMainLooper()).post { runnable() }
 }
 
-private val gson = GsonBuilder().registerTypeAdapter(Date::class.java, DateSerializer).create()
+private val gson = GsonBuilder()
+    .registerTypeAdapter(Date::class.java, DateSerializer)
+    .registerTypeAdapter(LocalDateTime::class.java, LocalDateTimeSerializer)
+    .create()
 
 private var wrapperInternal: PolarWrapper? = null
 private val wrapper: PolarWrapper

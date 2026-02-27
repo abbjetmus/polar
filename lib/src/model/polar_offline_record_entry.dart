@@ -14,7 +14,7 @@ class PolarOfflineRecordingEntry {
   final int size;
 
   /// The date and time when the recording was made.
-  @UnixTimeConverter()
+  @FlexibleDateTimeConverter()
   final DateTime date;
 
   /// The type of data recorded by the Polar device.
