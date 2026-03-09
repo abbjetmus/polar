@@ -1194,6 +1194,56 @@ class Polar {
     }
   }
 
+  /// Gets the daily summary data for a specific date range.
+  ///
+  /// This method retrieves daily summary data which includes steps, calories,
+  /// distance, and the daily balance feedback (training load recommendation).
+  ///
+  /// - Parameters:
+  ///   - identifier: Polar device id or address
+  ///   - fromDate: Start date for the range
+  ///   - toDate: End date for the range
+  /// - Returns: List of daily summary data for the given date range
+  ///   - success: Returns a list of daily summary data (may be empty if no data available)
+  ///   - onError: Possible errors are returned as exceptions
+  Future<List<PolarDailySummaryData>> getDailySummary(
+    String identifier,
+    DateTime fromDate,
+    DateTime toDate,
+  ) async {
+    try {
+      final formattedFromDate = DateFormat('yyyy-MM-dd').format(fromDate);
+      final formattedToDate = DateFormat('yyyy-MM-dd').format(toDate);
+
+      final result = await _methodChannel.invokeMethod<String>(
+        'getDailySummary',
+        [
+          identifier,
+          formattedFromDate,
+          formattedToDate,
+        ],
+      );
+
+      if (result == null || result.isEmpty) {
+        return [];
+      }
+
+      try {
+        final data = jsonDecode(result) as List;
+        return data
+            .map((e) =>
+                PolarDailySummaryData.fromJson(e as Map<String, dynamic>))
+            .toList();
+      } catch (e) {
+        debugPrint('Error parsing daily summary data: $e');
+        return [];
+      }
+    } catch (e) {
+      debugPrint('Error getting daily summary data: $e');
+      return [];
+    }
+  }
+
   /// Notify device of the incoming data transfer operation(s).
   ///
   /// By using this method the device will handle data transfer operations more

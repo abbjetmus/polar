@@ -690,6 +690,36 @@ class PolarActiveTimeDataCodable: Encodable {
     }
 }
 
+// Daily Summary Data Codable
+class PolarDailySummaryCodable: Encodable {
+    let data: PolarDailySummary
+
+    init(_ data: PolarDailySummary) {
+        self.data = data
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case date
+        case steps
+        case activityCalories
+        case trainingCalories
+        case bmrCalories
+        case activityDistance
+        case dailyBalanceFeedback
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(data.date, forKey: .date)
+        try container.encode(data.steps, forKey: .steps)
+        try container.encode(data.activityCalories, forKey: .activityCalories)
+        try container.encode(data.trainingCalories, forKey: .trainingCalories)
+        try container.encode(data.bmrCalories, forKey: .bmrCalories)
+        try container.encode(data.activityDistance, forKey: .activityDistance)
+        try container.encode(data.dailyBalanceFeedback.rawValue, forKey: .dailyBalanceFeedback)
+    }
+}
+
 // Activity Sample Data Codables
 class PolarActivityInfoCodable: Encodable {
     let timeStamp: String

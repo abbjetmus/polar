@@ -166,6 +166,8 @@ public class SwiftPolarPlugin:
         getActiveTime(call, result)
       case "getActivitySampleData":
         getActivitySampleData(call, result)
+      case "getDailySummary":
+        getDailySummary(call, result)
       case "sendInitializationAndStartSyncNotifications":
         sendInitializationAndStartSyncNotifications(call, result)
       case "sendTerminateAndStopSyncNotifications":
@@ -1434,6 +1436,72 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "ERROR_GETTING_ACTIVITY_SAMPLE_DATA",
+              message: error.localizedDescription,
+              details: nil))
+        }
+      )
+  }
+
+  func getDailySummary(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
+    guard let arguments = call.arguments as? [Any],
+      arguments.count == 3,
+      let identifier = arguments[0] as? String,
+      let fromDateString = arguments[1] as? String,
+      let toDateString = arguments[2] as? String
+    else {
+      result(
+        FlutterError(
+          code: "INVALID_ARGUMENTS",
+          message: "Expected [identifier, fromDate, toDate]",
+          details: nil))
+      return
+    }
+
+    let dateFormatter = DateFormatter()
+    dateFormatter.dateFormat = "yyyy-MM-dd"
+
+    guard let fromDate = dateFormatter.date(from: fromDateString),
+      let toDate = dateFormatter.date(from: toDateString)
+    else {
+      result(
+        FlutterError(
+          code: "INVALID_DATE_FORMAT",
+          message: "Dates must be in yyyy-MM-dd format",
+          details: nil))
+      return
+    }
+
+    _ = api.getDailySummaryData(identifier: identifier, fromDate: fromDate, toDate: toDate)
+      .subscribe(
+        onSuccess: { summaryData in
+          do {
+            let codableData = summaryData.map { summary in
+              PolarDailySummaryCodable(summary)
+            }
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let jsonData = try encoder.encode(codableData)
+            if let jsonString = String(data: jsonData, encoding: .utf8) {
+              result(jsonString)
+            } else {
+              result(
+                FlutterError(
+                  code: "ENCODING_ERROR",
+                  message: "Failed to convert JSON data to string",
+                  details: nil))
+            }
+          } catch {
+            result(
+              FlutterError(
+                code: "ENCODING_ERROR",
+                message: "Failed to encode daily summary data: \(error.localizedDescription)",
+                details: nil))
+          }
+        },
+        onFailure: { error in
+          result(
+            FlutterError(
+              code: "ERROR_GETTING_DAILY_SUMMARY",
               message: error.localizedDescription,
               details: nil))
         }

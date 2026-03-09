@@ -210,6 +210,7 @@ class PolarPlugin :
             "getDistance" -> getDistance(call, result)
             "getActiveTime" -> getActiveTime(call, result)
             "getActivitySampleData" -> getActivitySampleData(call, result)
+            "getDailySummary" -> getDailySummary(call, result)
             "sendInitializationAndStartSyncNotifications" -> sendInitializationAndStartSyncNotifications(call, result)
             "sendTerminateAndStopSyncNotifications" -> sendTerminateAndStopSyncNotifications(call, result)
             "checkFirmwareUpdate" -> checkFirmwareUpdate(call, result)
@@ -1370,6 +1371,91 @@ class PolarPlugin :
         } catch (e: Exception) {
             android.util.Log.e("PolarPlugin", "Exception in getActivitySampleData", e)
             result.error("UNEXPECTED_ERROR", "Unexpected error in getActivitySampleData: ${e.message}", null)
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun getDailySummary(call: MethodCall, result: Result) {
+        try {
+            android.util.Log.d("PolarPlugin", "getDailySummary called with arguments: ${call.arguments}")
+
+            val arguments = call.arguments as? List<*>
+            if (arguments == null) {
+                result.error("INVALID_ARGUMENTS", "Arguments must be a non-null List", null)
+                return
+            }
+
+            if (arguments.size < 3) {
+                result.error("INVALID_ARGUMENTS", "Expected 3 arguments: identifier, fromDate, toDate", null)
+                return
+            }
+
+            val identifier = arguments[0] as? String
+            if (identifier == null) {
+                result.error("INVALID_ARGUMENTS", "Device identifier must be a non-null String", null)
+                return
+            }
+
+            val fromDateString = arguments[1] as? String
+            if (fromDateString == null) {
+                result.error("INVALID_ARGUMENTS", "fromDate must be a non-null String", null)
+                return
+            }
+
+            val toDateString = arguments[2] as? String
+            if (toDateString == null) {
+                result.error("INVALID_ARGUMENTS", "toDate must be a non-null String", null)
+                return
+            }
+
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            val fromDateParsed = dateFormat.parse(fromDateString)
+            val toDateParsed = dateFormat.parse(toDateString)
+
+            if (fromDateParsed == null || toDateParsed == null) {
+                result.error("INVALID_DATE_FORMAT", "Could not parse date strings", null)
+                return
+            }
+
+            val fromDate = fromDateParsed.toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
+            val toDate = toDateParsed.toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
+
+            wrapper.api
+                .getDailySummaryData(identifier, fromDate, toDate)
+                .onErrorReturn { error ->
+                    android.util.Log.e("PolarPlugin", "Error in getDailySummary API call: ${error.message}", error)
+                    if (error.toString().contains("PftpResponseError") && error.toString().contains("Error: 103")) {
+                        emptyList()
+                    } else {
+                        throw error
+                    }
+                }
+                .subscribe({ summaryDataList ->
+                    android.util.Log.d("PolarPlugin", "Received daily summary data: ${summaryDataList.size} entries")
+                    val response = summaryDataList.map { summaryData ->
+                        mapOf(
+                            "date" to (summaryData.date?.format(DateTimeFormatter.ISO_LOCAL_DATE) ?: ""),
+                            "steps" to summaryData.steps,
+                            "activityCalories" to summaryData.activityCalories,
+                            "trainingCalories" to summaryData.trainingCalories,
+                            "bmrCalories" to summaryData.bmrCalories,
+                            "activityDistance" to summaryData.activityDistance,
+                            "dailyBalanceFeedback" to summaryData.dailyBalanceFeedback?.name
+                        )
+                    }
+                    runOnUiThread {
+                        result.success(gson.toJson(response))
+                    }
+                }, { error ->
+                    android.util.Log.e("PolarPlugin", "Error in getDailySummary subscription: ${error.message}", error)
+                    runOnUiThread {
+                        result.error("GET_DAILY_SUMMARY_ERROR", "Error fetching daily summary data: ${error.message}", null)
+                    }
+                })
+
+        } catch (e: Exception) {
+            android.util.Log.e("PolarPlugin", "Exception in getDailySummary", e)
+            result.error("UNEXPECTED_ERROR", "Unexpected error in getDailySummary: ${e.message}", null)
         }
     }
 
