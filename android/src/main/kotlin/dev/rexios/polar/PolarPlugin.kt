@@ -1350,8 +1350,13 @@ class PolarPlugin :
                             }
                         }
                         
+                        // Use startTime's local date — this is the sensor's calendar date
+                        // (sensor local time, set via setLocalTime, matches the date folder
+                        // the SDK read from). Only null if the day had no sample data.
+                        val date = dayData.polarActivitySamplesDataList?.firstOrNull()?.startTime?.toLocalDate()?.format(DateTimeFormatter.ISO_LOCAL_DATE)
+
                         mapOf(
-                            "date" to dayData.polarActivitySamplesDataList?.firstOrNull()?.startTime?.toLocalDate()?.toString(),
+                            "date" to date,
                             "samplesDataList" to samplesDataList
                         )
                     }
