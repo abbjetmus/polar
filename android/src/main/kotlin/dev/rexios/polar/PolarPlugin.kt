@@ -1591,6 +1591,15 @@ class PolarWrapper(
         success("sdkFeatureReady", listOf(identifier, feature.name))
     }
 
+    override fun bleSdkFeaturesReadiness(
+        identifier: String,
+        ready: List<PolarBleSdkFeature>,
+        unavailable: List<PolarBleSdkFeature>,
+    ) {
+        android.util.Log.d("PolarPlugin", "bleSdkFeaturesReadiness: identifier=$identifier, ready=${ready.map { it.name }}, unavailable=${unavailable.map { it.name }}")
+        success("sdkFeaturesReadiness", listOf(identifier, ready.map { it.name }, unavailable.map { it.name }))
+    }
+
     override fun deviceConnected(polarDeviceInfo: PolarDeviceInfo) {
         android.util.Log.d("PolarPlugin", "deviceConnected: deviceId=${polarDeviceInfo.deviceId}")
         success("deviceConnected", gson.toJson(polarDeviceInfo))

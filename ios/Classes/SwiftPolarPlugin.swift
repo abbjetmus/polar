@@ -553,6 +553,16 @@ public class SwiftPolarPlugin:
       ])
   }
 
+  public func bleSdkFeaturesReadiness(_ identifier: String, ready: [PolarBleSdkFeature], unavailable: [PolarBleSdkFeature]) {
+    success(
+      "sdkFeaturesReadiness",
+      data: [
+        identifier,
+        ready.map { PolarBleSdkFeature.allCases.firstIndex(of: $0)! },
+        unavailable.map { PolarBleSdkFeature.allCases.firstIndex(of: $0)! },
+      ])
+  }
+
   public func disInformationReceived(_ identifier: String, uuid: CBUUID, value: String) {
     success(
       "disInformationReceived", data: [identifier, uuid.uuidString, value])
