@@ -199,6 +199,7 @@ class PolarPlugin :
             "listOfflineRecordings" -> listOfflineRecordings(call, result)
             "getOfflineRecord" -> getOfflineRecord(call, result)
             "removeOfflineRecord" -> removeOfflineRecord(call, result)
+            "getChargerState" -> getChargerState(call, result)
             "getDiskSpace" -> getDiskSpace(call, result)
             "getLocalTime" -> getLocalTime(call, result)
             "setLocalTime" -> setLocalTime(call, result)
@@ -699,6 +700,20 @@ class PolarPlugin :
                 }
             })
             
+    }
+
+    private fun getChargerState(call: MethodCall, result: Result) {
+        val identifier = call.arguments as String
+        try {
+            val chargeState = wrapper.api.getChargerState(identifier)
+            runOnUiThread {
+                result.success(chargeState.name)
+            }
+        } catch (e: Exception) {
+            runOnUiThread {
+                result.error("GET_CHARGER_STATE_ERROR", e.message, null)
+            }
+        }
     }
 
     private fun getDiskSpace(call: MethodCall, result: Result) {

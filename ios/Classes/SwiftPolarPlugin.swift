@@ -144,6 +144,8 @@ public class SwiftPolarPlugin:
         getOfflineRecord(call, result)
       case "removeOfflineRecord":
         removeOfflineRecord(call, result)
+      case "getChargerState":
+        getChargerState(call, result)
       case "getDiskSpace":
         getDiskSpace(call, result)
       case "getLocalTime":
@@ -836,6 +838,28 @@ public class SwiftPolarPlugin:
             FlutterError(
               code: "Error removing exercise", message: error.localizedDescription, details: nil))
         })
+    }
+  }
+
+  func getChargerState(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
+    let identifier = call.arguments as! String
+    do {
+      let chargeState = try api.getChargerState(identifier: identifier)
+      // Return as string matching the Swift enum case names
+      let stateString: String
+      switch chargeState {
+      case .charging: stateString = "charging"
+      case .dischargingActive: stateString = "dischargingActive"
+      case .dischargingInactive: stateString = "dischargingInactive"
+      default: stateString = "unknown"
+      }
+      result(stateString)
+    } catch {
+      result(
+        FlutterError(
+          code: "GET_CHARGER_STATE_ERROR",
+          message: error.localizedDescription,
+          details: nil))
     }
   }
 

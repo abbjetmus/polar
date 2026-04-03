@@ -854,6 +854,24 @@ class Polar {
     );
   }
 
+  /// Gets the current charging state of the Polar device.
+  ///
+  /// This is more reliable than the [batteryChargingStatus] stream for
+  /// determining the charging state at a specific point in time, since the
+  /// stream only reports state transitions, not the initial state on connection.
+  ///
+  /// - Parameters:
+  ///   - identifier: Polar device id or address.
+  /// - Returns: The current [PolarChargeState] of the device.
+  Future<PolarChargeState> getChargerState(String identifier) async {
+    final result = await _methodChannel.invokeMethod<String>(
+      'getChargerState',
+      identifier,
+    );
+    if (result == null) return PolarChargeState.unknown;
+    return PolarChargeState.fromJson(result);
+  }
+
   /// Fetches the available and used disk space on a Polar device.
   ///
   /// - Parameters:
