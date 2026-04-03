@@ -1392,7 +1392,7 @@ public class SwiftPolarPlugin:
                 ]
               }
 
-              // Extract date string from first sample's startTime
+              // Extract date from first sample's startTime (sensor-local calendar date)
               let dateString: String
               if let firstSample = samplesDataList.first,
                 let startTime = firstSample["startTime"] as? String,

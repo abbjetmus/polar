@@ -1305,12 +1305,12 @@ class PolarPlugin :
             val toDate = toDateParsed!!.toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
             
             android.util.Log.d("PolarPlugin", "Calling Polar API getActivitySampleData with identifier=$identifier, fromDate=$fromDate, toDate=$toDate")
-            
+
             wrapper.api
                 .getActivitySampleData(identifier, fromDate, toDate)
                 .onErrorReturn { error ->
                     android.util.Log.e("PolarPlugin", "Error in getActivitySampleData API call: ${error.message}", error)
-                    
+
                     if (error.toString().contains("PftpResponseError") && error.toString().contains("Error: 103")) {
                         android.util.Log.e("PolarPlugin", "PSFTP Protocol error 103 - likely no activity sample data available for the requested period")
                         emptyList()
@@ -1320,11 +1320,11 @@ class PolarPlugin :
                 }
                 .subscribe({ activitySampleDataList: List<com.polar.sdk.api.model.activity.PolarActivitySamplesDayData> ->
                     android.util.Log.d("PolarPlugin", "Received activity sample data: ${activitySampleDataList.size} entries")
-                    
+
                     val response = activitySampleDataList.map { dayData ->
                         // Extract all samples data for this day
                         val samplesDataList = mutableListOf<Map<String, Any?>>()
-                        
+
                         dayData.polarActivitySamplesDataList?.let { samplesList ->
                             for (samplesData in samplesList) {
                                 // Extract activity info for this sample
@@ -1338,7 +1338,7 @@ class PolarPlugin :
                                         ))
                                     }
                                 }
-                                
+
                                 // Create complete samples data object
                                 samplesDataList.add(mapOf(
                                     "startTime" to samplesData.startTime.toString(),
@@ -1350,9 +1350,14 @@ class PolarPlugin :
                                 ))
                             }
                         }
-                        
+
+                        // Use startTime's local date — this is the sensor's calendar date
+                        // (sensor local time, set via setLocalTime, matches the date folder
+                        // the SDK read from). Only null if the day had no sample data.
+                        val date = dayData.polarActivitySamplesDataList?.firstOrNull()?.startTime?.toLocalDate()?.toString()
+
                         mapOf(
-                            "date" to dayData.polarActivitySamplesDataList?.firstOrNull()?.startTime?.toLocalDate()?.toString(),
+                            "date" to date,
                             "samplesDataList" to samplesDataList
                         )
                     }
