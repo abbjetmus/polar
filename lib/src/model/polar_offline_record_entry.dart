@@ -4,6 +4,23 @@ import 'package:polar/src/model/convert.dart';
 
 part 'polar_offline_record_entry.g.dart';
 
+DateTime _parseDateField(dynamic value) {
+  if (value is num) {
+    // Android: unix timestamp in milliseconds
+    return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+  } else if (value is String) {
+    // iOS: iso8601 string
+    return DateTime.parse(value);
+  } else if (value is Map) {
+    // Fallback: map format
+    return const MapToDateTimeConverter()
+        .fromJson(Map<String, dynamic>.from(value));
+  }
+  throw ArgumentError('Unexpected date format: $value (${value.runtimeType})');
+}
+
+String _dateToJson(DateTime date) => date.toIso8601String();
+
 /// A class representing an offline recording entry from a Polar device.
 @JsonSerializable()
 class PolarOfflineRecordingEntry {
@@ -14,7 +31,9 @@ class PolarOfflineRecordingEntry {
   final int size;
 
   /// The date and time when the recording was made.
-  @UnixTimeConverter()
+  /// On Android this comes as a unix timestamp (milliseconds).
+  /// On iOS this comes as an ISO 8601 string.
+  @JsonKey(fromJson: _parseDateField, toJson: _dateToJson)
   final DateTime date;
 
   /// The type of data recorded by the Polar device.

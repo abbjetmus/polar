@@ -1,11 +1,8 @@
 package dev.rexios.polar
 
-import android.annotation.TargetApi
 import android.content.Context
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import androidx.annotation.RequiresApi
 import androidx.lifecycle.Lifecycle.Event
 import androidx.lifecycle.LifecycleEventObserver
 import com.google.gson.GsonBuilder
@@ -49,16 +46,12 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import io.reactivex.rxjava3.disposables.Disposable
 import java.lang.reflect.Type
-import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Date
-import java.util.Locale
 import java.util.UUID
-
-fun Any?.discard() = Unit
 
 object DateSerializer : JsonDeserializer<Date>, JsonSerializer<Date> {
     override fun deserialize(
@@ -78,7 +71,30 @@ private fun runOnUiThread(runnable: () -> Unit) {
     Handler(Looper.getMainLooper()).post { runnable() }
 }
 
-private val gson = GsonBuilder().registerTypeAdapter(Date::class.java, DateSerializer).create()
+private val gson = GsonBuilder()
+    .registerTypeAdapter(Date::class.java, DateSerializer)
+    .create()
+
+private fun PolarOfflineRecordingEntry.toJsonString(): String {
+    val millis = date.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+    return """{"path":"$path","size":$size,"date":$millis,"type":"${type.name}"}"""
+}
+
+private fun offlineEntryFromJson(json: String): PolarOfflineRecordingEntry {
+    val map = gson.fromJson(json, Map::class.java)
+    val dateValue = map["date"]
+    val dateTime = when (dateValue) {
+        is Number -> java.time.LocalDateTime.ofInstant(Instant.ofEpochMilli(dateValue.toLong()), ZoneId.systemDefault())
+        is String -> java.time.LocalDateTime.parse(dateValue, java.time.format.DateTimeFormatter.ISO_DATE_TIME)
+        else -> throw IllegalArgumentException("Unexpected date format: $dateValue")
+    }
+    return PolarOfflineRecordingEntry(
+        path = map["path"] as String,
+        size = (map["size"] as Number).toLong(),
+        date = dateTime,
+        type = PolarDeviceDataType.valueOf(map["type"] as String),
+    )
+}
 
 private var wrapperInternal: PolarWrapper? = null
 private val wrapper: PolarWrapper
@@ -137,7 +153,6 @@ class PolarPlugin :
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
     override fun onMethodCall(
         call: MethodCall,
         result: Result,
@@ -657,7 +672,7 @@ class PolarPlugin :
         wrapper.api
             .listOfflineRecordings(identifier)
             .subscribe({
-                recordings.add(gson.toJson(it))
+                recordings.add(it.toJsonString())
             }, {
                 runOnUiThread {
                     result.error(it.toString(), it.message, null)
@@ -671,7 +686,7 @@ class PolarPlugin :
     private fun getOfflineRecord(call: MethodCall, result: Result) {
         val arguments = call.arguments as List<*>
         val identifier = arguments[0] as String
-        val entry = gson.fromJson(arguments[1] as String, PolarOfflineRecordingEntry::class.java)
+        val entry = offlineEntryFromJson(arguments[1] as String)
 
         wrapper.api
             .getOfflineRecord(identifier, entry)
@@ -688,7 +703,7 @@ class PolarPlugin :
     private fun removeOfflineRecord(call: MethodCall, result: Result) {
         val arguments = call.arguments as List<*>
         val identifier = arguments[0] as String
-        val entry = gson.fromJson(arguments[1] as String, PolarOfflineRecordingEntry::class.java)
+        val entry = offlineEntryFromJson(arguments[1] as String)
 
         wrapper.api
             .removeOfflineRecord(identifier, entry)
@@ -887,7 +902,6 @@ class PolarPlugin :
             
     }
 
-    @TargetApi(Build.VERSION_CODES.O)
     private fun deleteStoredDeviceData(call: MethodCall, result: Result) {
         val arguments = call.arguments as List<*>
         val identifier = arguments[0] as String
@@ -910,10 +924,7 @@ class PolarPlugin :
             else -> throw IllegalArgumentException("Invalid PolarStoredDataType: $dataTypeName")
         }
         
-        val until = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(arguments[2] as String)
-            .toInstant()
-            .atZone(ZoneId.systemDefault())
-            .toLocalDate()
+        val until = LocalDate.parse(arguments[2] as String)
 
         wrapper.api
             .deleteStoredDeviceData(identifier, dataType, until)
@@ -927,18 +938,11 @@ class PolarPlugin :
             
     }
 
-    @TargetApi(Build.VERSION_CODES.O)
     private fun deleteDeviceDateFolders(call: MethodCall, result: Result) {
         val arguments = call.arguments as List<*>
         val identifier = arguments[0] as String
-        val fromDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(arguments[1] as String)
-            .toInstant()
-            .atZone(ZoneId.systemDefault())
-            .toLocalDate()
-        val toDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(arguments[2] as String)
-            .toInstant()
-            .atZone(ZoneId.systemDefault())
-            .toLocalDate()
+        val fromDate = LocalDate.parse(arguments[1] as String)
+        val toDate = LocalDate.parse(arguments[2] as String)
 
         wrapper.api
             .deleteDeviceDateFolders(identifier, fromDate, toDate)
@@ -952,7 +956,6 @@ class PolarPlugin :
             
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
     private fun getSteps(call: MethodCall, result: Result) {
         try {
             android.util.Log.d("PolarPlugin", "getSteps called with arguments: ${call.arguments}")
@@ -993,18 +996,8 @@ class PolarPlugin :
             
             android.util.Log.d("PolarPlugin", "Parsing dates: fromDate=$fromDateString, toDate=$toDateString")
             
-            val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-            val fromDateParsed = dateFormat.parse(fromDateString)
-            val toDateParsed = dateFormat.parse(toDateString)
-            
-            if (fromDateParsed == null || toDateParsed == null) {
-                android.util.Log.e("PolarPlugin", "Failed to parse dates: fromDate=$fromDateParsed, toDate=$toDateParsed")
-                result.error("INVALID_DATE_FORMAT", "Could not parse date strings", null)
-                return
-            }
-            
-            val fromDate = fromDateParsed.toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
-            val toDate = toDateParsed.toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
+            val fromDate = LocalDate.parse(fromDateString)
+            val toDate = LocalDate.parse(toDateString)
             
             android.util.Log.d("PolarPlugin", "Calling Polar API getSteps with identifier=$identifier, fromDate=$fromDate, toDate=$toDate")
             
@@ -1050,7 +1043,6 @@ class PolarPlugin :
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
     private fun getDistance(call: MethodCall, result: Result) {
         try {
             android.util.Log.d("PolarPlugin", "getDistance called with arguments: ${call.arguments}")
@@ -1091,18 +1083,8 @@ class PolarPlugin :
             
             android.util.Log.d("PolarPlugin", "Parsing dates: fromDate=$fromDateString, toDate=$toDateString")
             
-            val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-            val fromDateParsed = dateFormat.parse(fromDateString)
-            val toDateParsed = dateFormat.parse(toDateString)
-            
-            if (fromDateParsed == null || toDateParsed == null) {
-                android.util.Log.e("PolarPlugin", "Failed to parse dates: fromDate=$fromDateParsed, toDate=$toDateParsed")
-                result.error("INVALID_DATE_FORMAT", "Could not parse date strings", null)
-                return
-            }
-            
-            val fromDate = fromDateParsed.toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
-            val toDate = toDateParsed.toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
+            val fromDate = LocalDate.parse(fromDateString)
+            val toDate = LocalDate.parse(toDateString)
             
             android.util.Log.d("PolarPlugin", "Calling Polar API getDistance with identifier=$identifier, fromDate=$fromDate, toDate=$toDate")
             
@@ -1147,7 +1129,6 @@ class PolarPlugin :
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
     private fun getActiveTime(call: MethodCall, result: Result) {
         try {
             android.util.Log.d("PolarPlugin", "getActiveTime called with arguments: ${call.arguments}")
@@ -1188,18 +1169,8 @@ class PolarPlugin :
             
             android.util.Log.d("PolarPlugin", "Parsing dates: fromDate=$fromDateString, toDate=$toDateString")
             
-            val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-            val fromDateParsed = dateFormat.parse(fromDateString)
-            val toDateParsed = dateFormat.parse(toDateString)
-            
-            if (fromDateParsed == null || toDateParsed == null) {
-                android.util.Log.e("PolarPlugin", "Failed to parse dates: fromDate=$fromDateParsed, toDate=$toDateParsed")
-                result.error("INVALID_DATE_FORMAT", "Could not parse date strings", null)
-                return
-            }
-            
-            val fromDate = fromDateParsed.toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
-            val toDate = toDateParsed.toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
+            val fromDate = LocalDate.parse(fromDateString)
+            val toDate = LocalDate.parse(toDateString)
             
             android.util.Log.d("PolarPlugin", "Calling Polar API getActiveTime with identifier=$identifier, fromDate=$fromDate, toDate=$toDate")
             
@@ -1263,7 +1234,6 @@ class PolarPlugin :
         )
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
     private fun getActivitySampleData(call: MethodCall, result: Result) {
         try {
             android.util.Log.d("PolarPlugin", "getActivitySampleData called with arguments: ${call.arguments}")
@@ -1304,19 +1274,8 @@ class PolarPlugin :
             
             android.util.Log.d("PolarPlugin", "Parsing dates: fromDate=$fromDateString, toDate=$toDateString")
             
-            val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-            val fromDateParsed = dateFormat.parse(fromDateString)
-            val toDateParsed = dateFormat.parse(toDateString)
-            
-            if (fromDateParsed == null || toDateParsed == null) {
-                android.util.Log.e("PolarPlugin", "Failed to parse dates: fromDate=$fromDateParsed, toDate=$toDateParsed")
-                result.error("INVALID_DATE_FORMAT", "Could not parse date strings", null)
-                return
-            }
-            
-            // Convert Date to LocalDate using Java 8 time APIs (API 26+)
-            val fromDate = fromDateParsed!!.toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
-            val toDate = toDateParsed!!.toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
+            val fromDate = LocalDate.parse(fromDateString)
+            val toDate = LocalDate.parse(toDateString)
             
             android.util.Log.d("PolarPlugin", "Calling Polar API getActivitySampleData with identifier=$identifier, fromDate=$fromDate, toDate=$toDate")
             
@@ -1426,7 +1385,6 @@ class PolarPlugin :
                     result.error(error.toString(), error.message, null)
                 }
             })
-            .discard()
     }
 
     private fun checkFirmwareUpdate(call: MethodCall, result: Result) {
@@ -1446,7 +1404,6 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            .discard()
     }
 
     private fun updateFirmware(call: MethodCall, result: Result) {
@@ -1496,7 +1453,6 @@ class PolarPlugin :
             }, {
                 runOnUiThread { result.success(null) }
             })
-            .discard()
     }
 
     private fun checkFirmwareUpdateStatusToMap(status: CheckFirmwareUpdateStatus): Map<String, Any?> {

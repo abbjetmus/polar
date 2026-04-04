@@ -33,4 +33,5 @@ const _$PolarEventEnumMap = {
   PolarEvent.firmwareUpdateCheckStatusReceived:
       'firmwareUpdateCheckStatusReceived',
   PolarEvent.firmwareUpdateStatusReceived: 'firmwareUpdateStatusReceived',
+  PolarEvent.sdkFeaturesReadiness: 'sdkFeaturesReadiness',
 };

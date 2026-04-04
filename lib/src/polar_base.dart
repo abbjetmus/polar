@@ -198,17 +198,14 @@ class Polar {
       final androidDeviceInfo = await DeviceInfoPlugin().androidInfo;
       final sdkInt = androidDeviceInfo.version.sdkInt;
 
-      // If we are on Android M+
-      if (sdkInt >= 23) {
-        // If we are on an Android version before S or bluetooth scan is used to derive location
-        if (sdkInt < 31 || !_bluetoothScanNeverForLocation) {
-          await Permission.location.request();
-        }
-        // If we are on Android S+
-        if (sdkInt >= 31) {
-          await Permission.bluetoothScan.request();
-          await Permission.bluetoothConnect.request();
-        }
+      // If we are on an Android version before S or bluetooth scan is used to derive location
+      if (sdkInt < 31 || !_bluetoothScanNeverForLocation) {
+        await Permission.location.request();
+      }
+      // If we are on Android S+
+      if (sdkInt >= 31) {
+        await Permission.bluetoothScan.request();
+        await Permission.bluetoothConnect.request();
       }
     }
   }
@@ -1169,7 +1166,6 @@ class Polar {
   ///   - success: Returns a list of activity sample data (may be empty if no data available)
   ///   - onError: Possible errors are returned as exceptions
   ///
-  /// Note: This method requires Android API level 26+ due to Java 8 time API usage.
   Future<List<PolarActivitySampleData>> getActivitySampleData(
     String identifier,
     DateTime fromDate,
@@ -1235,7 +1231,6 @@ class Polar {
   /// The date range is inclusive. Deletes the day folder (plus all sub-folders
   /// with any contents).
   ///
-  /// Note: This method requires Android API level 26+ due to Java 8 time API usage.
   ///
   /// - Parameters:
   ///   - identifier: Polar device ID or BT address

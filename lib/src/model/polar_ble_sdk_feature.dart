@@ -36,7 +36,25 @@ enum PolarSdkFeature {
   ledAnimation,
 
   /// Feature to enable or disable file transfer.
-  fileTransfer;
+  fileTransfer,
+
+  /// Feature to update firmware on Polar device.
+  firmwareUpdate,
+
+  /// Feature to read activity data from Polar device.
+  activityData,
+
+  /// Feature to read sleep data from Polar device.
+  sleepData,
+
+  /// Feature to read temperature data from Polar device.
+  temperatureData,
+
+  /// Feature to read training data from Polar device.
+  trainingData,
+
+  /// Feature to control Polar device.
+  deviceControl;
 
   static const _featureStringMap = {
     hr: 'FEATURE_HR',
@@ -49,6 +67,12 @@ enum PolarSdkFeature {
     sdkMode: 'FEATURE_POLAR_SDK_MODE',
     ledAnimation: 'FEATURE_POLAR_LED_ANIMATION',
     fileTransfer: 'FEATURE_POLAR_FILE_TRANSFER',
+    firmwareUpdate: 'FEATURE_POLAR_FIRMWARE_UPDATE',
+    activityData: 'FEATURE_POLAR_ACTIVITY_DATA',
+    sleepData: 'FEATURE_POLAR_SLEEP_DATA',
+    temperatureData: 'FEATURE_POLAR_TEMPERATURE_DATA',
+    trainingData: 'FEATURE_POLAR_TRAINING_DATA',
+    deviceControl: 'FEATURE_POLAR_DEVICE_CONTROL',
   };
 
   static final _stringFeatureMap =

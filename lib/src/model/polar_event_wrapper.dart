@@ -56,4 +56,7 @@ enum PolarEvent {
 
   /// Firmware update status received
   firmwareUpdateStatusReceived,
+
+  /// SDK features readiness (all features evaluated at once)
+  sdkFeaturesReadiness,
 }

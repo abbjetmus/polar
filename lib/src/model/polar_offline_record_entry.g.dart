@@ -13,7 +13,7 @@ PolarOfflineRecordingEntry _$PolarOfflineRecordingEntryFromJson(
     PolarOfflineRecordingEntry(
       path: json['path'] as String,
       size: (json['size'] as num).toInt(),
-      date: const UnixTimeConverter().fromJson((json['date'] as num).toInt()),
+      date: _parseDateField(json['date']),
       type: const PolarDataTypeConverter().fromJson(json['type']),
     );
 
@@ -22,6 +22,6 @@ Map<String, dynamic> _$PolarOfflineRecordingEntryToJson(
     <String, dynamic>{
       'path': instance.path,
       'size': instance.size,
-      'date': const UnixTimeConverter().toJson(instance.date),
+      'date': _dateToJson(instance.date),
       'type': const PolarDataTypeConverter().toJson(instance.type),
     };
