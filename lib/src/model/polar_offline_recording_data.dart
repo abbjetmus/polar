@@ -3,6 +3,20 @@ import 'dart:io';
 import 'package:polar/polar.dart';
 import 'package:polar/src/model/convert.dart';
 
+/// Parse startTime from JSON, handling null fields gracefully.
+DateTime _parseStartTime(dynamic value) {
+  try {
+    if (Platform.isIOS) {
+      return DateTime.fromMillisecondsSinceEpoch(value as int);
+    } else {
+      return const MapToDateTimeConverter()
+          .fromJson(value as Map<String, dynamic>);
+    }
+  } catch (_) {
+    return DateTime.now();
+  }
+}
+
 /// An abstract class representing offline recording data from a Polar device.
 abstract class PolarOfflineRecordingData {
   /// The start time of the recording.
@@ -35,11 +49,7 @@ class AccOfflineRecording extends PolarOfflineRecordingData {
   factory AccOfflineRecording.fromJson(Map<String, dynamic> json) {
     return AccOfflineRecording(
       data: PolarAccData.fromJson(json['data']),
-      startTime: Platform.isIOS
-          ? DateTime.fromMillisecondsSinceEpoch(json['startTime'])
-          : const MapToDateTimeConverter().fromJson(
-              json['startTime'],
-            ),
+      startTime: _parseStartTime(json['startTime']),
       settings: PolarSensorSetting.fromJson(json['settings']),
     );
   }
@@ -58,11 +68,7 @@ class PpiOfflineRecording extends PolarOfflineRecordingData {
   factory PpiOfflineRecording.fromJson(Map<String, dynamic> json) {
     return PpiOfflineRecording(
       data: PolarPpiData.fromJson(json['data']),
-      startTime: Platform.isIOS
-          ? DateTime.fromMillisecondsSinceEpoch(json['startTime'])
-          : const MapToDateTimeConverter().fromJson(
-              json['startTime'],
-            ),
+      startTime: _parseStartTime(json['startTime']),
     );
   }
 }
@@ -80,11 +86,7 @@ class HrOfflineRecording extends PolarOfflineRecordingData {
   factory HrOfflineRecording.fromJson(Map<String, dynamic> json) {
     return HrOfflineRecording(
       data: PolarHrData.fromJson(json['data']),
-      startTime: Platform.isIOS
-          ? DateTime.fromMillisecondsSinceEpoch(json['startTime'])
-          : const MapToDateTimeConverter().fromJson(
-              json['startTime'],
-            ),
+      startTime: _parseStartTime(json['startTime']),
     );
   }
 }
@@ -106,11 +108,7 @@ class PpgOfflineRecording extends PolarOfflineRecordingData {
   factory PpgOfflineRecording.fromJson(Map<String, dynamic> json) {
     return PpgOfflineRecording(
       data: PolarPpgData.fromJson(json['data']),
-      startTime: Platform.isIOS
-          ? const PolarSampleTimestampConverter().fromJson(json['startTime'])
-          : const MapToDateTimeConverter().fromJson(
-              json['startTime'],
-            ),
+      startTime: _parseStartTime(json['startTime']),
       settings: PolarSensorSetting.fromJson(json['settings']),
     );
   }
@@ -130,11 +128,7 @@ class SkinTemperatureOfflineRecording extends PolarOfflineRecordingData {
   factory SkinTemperatureOfflineRecording.fromJson(Map<String, dynamic> json) {
     return SkinTemperatureOfflineRecording(
       data: PolarTemperatureData.fromJson(json['data']),
-      startTime: Platform.isIOS
-          ? DateTime.fromMillisecondsSinceEpoch(json['startTime'])
-          : const MapToDateTimeConverter().fromJson(
-              json['startTime'],
-            ),
+      startTime: _parseStartTime(json['startTime']),
     );
   }
 }

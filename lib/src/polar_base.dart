@@ -49,13 +49,15 @@ class Polar {
       .map((e) => e.data);
 
   /// feature ready callback
-  Stream<PolarSdkFeatureReadyEvent> get sdkFeatureReady =>
-      _eventStream.where((e) => e.event == PolarEvent.sdkFeatureReady).map(
-            (e) => PolarSdkFeatureReadyEvent(
-              e.data[0],
-              PolarSdkFeature.fromJson(e.data[1]),
-            ),
-          );
+  Stream<PolarSdkFeatureReadyEvent> get sdkFeatureReady => _eventStream
+      .where((e) => e.event == PolarEvent.sdkFeatureReady)
+      .where((e) => PolarSdkFeature.fromJson(e.data[1]) != null)
+      .map(
+        (e) => PolarSdkFeatureReadyEvent(
+          e.data[0],
+          PolarSdkFeature.fromJson(e.data[1])!,
+        ),
+      );
 
   /// Device connection has been established.
   ///
@@ -766,8 +768,7 @@ class Polar {
       [identifier, jsonEncode(entry.toJson())],
     );
     if (result == null) return null;
-    final data = jsonDecode(result);
-    return PpiOfflineRecording.fromJson(data);
+    return PpiOfflineRecording.fromJson(jsonDecode(result));
   }
 
   /// Fetches a specific offline recording from a Polar device.

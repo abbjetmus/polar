@@ -148,7 +148,8 @@ Map<String, dynamic> _$PolarPpgDataToJson(PolarPpgData instance) =>
 PolarPpiSample _$PolarPpiSampleFromJson(Map<String, dynamic> json) =>
     PolarPpiSample(
       ppi: (_readPpi(json, 'ppi') as num).toInt(),
-      errorEstimate: (_readErrorEstimate(json, 'errorEstimate') as num).toInt(),
+      errorEstimate:
+          (_readErrorEstimate(json, 'errorEstimate') as num?)?.toInt(),
       hr: (json['hr'] as num).toInt(),
       blockerBit: const PlatformBooleanConverter().fromJson(json['blockerBit']),
       skinContactStatus:

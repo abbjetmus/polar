@@ -691,13 +691,14 @@ class PolarPlugin :
         wrapper.api
             .getOfflineRecord(identifier, entry)
             .subscribe({
-                runOnUiThread { result.success(gson.toJson(it)) }
+                val json = gson.toJson(it)
+                runOnUiThread { result.success(json) }
             }, {
                 runOnUiThread {
                     result.error(it.toString(), it.message, null)
                 }
             })
-            
+
     }
 
     private fun removeOfflineRecord(call: MethodCall, result: Result) {

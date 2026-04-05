@@ -285,7 +285,7 @@ class PolarPpiSample {
 
   /// ppErrorEstimate estimate of the expected absolute error in PP-interval in milliseconds
   @JsonKey(readValue: _readErrorEstimate)
-  final int errorEstimate;
+  final int? errorEstimate;
 
   /// hr in BPM
   final int hr;

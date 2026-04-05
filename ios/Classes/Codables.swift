@@ -488,8 +488,19 @@ class PolarOfflineRecordingEntryCodable: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let path = try container.decode(String.self, forKey: .path)
         let size = try container.decode(UInt.self, forKey: .size)
-        let dateMillis = try container.decode(Double.self, forKey: .date)
-        let date = Date(timeIntervalSince1970: dateMillis / 1000)  // Convert milliseconds back to Date
+
+        // Handle date as either epoch millis (Double) or ISO 8601 string
+        let date: Date
+        if let dateMillis = try? container.decode(Double.self, forKey: .date) {
+            date = Date(timeIntervalSince1970: dateMillis / 1000)
+        } else if let dateString = try? container.decode(String.self, forKey: .date) {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            date = formatter.date(from: dateString) ?? Date()
+        } else {
+            date = Date()
+        }
+
         let typeIndex = try container.decode(Int.self, forKey: .type)
         let type = PolarDeviceDataType.allCases[typeIndex]
 
