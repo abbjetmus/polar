@@ -588,6 +588,20 @@ class Polar {
     return _methodChannel.invokeMethod('disableSdkMode', identifier);
   }
 
+  /// Enables or disables automatic OHR (optical heart rate) measurement on the
+  /// device, which controls generation of 24/7 HR and PPI autoSample data.
+  ///
+  /// Requires [PolarBleSdkFeature.featurePolarDeviceControl].
+  Future<void> setAutomaticOHRMeasurementEnabled(
+    String identifier,
+    bool enabled,
+  ) {
+    return _methodChannel.invokeMethod(
+      'setAutomaticOHRMeasurementEnabled',
+      [identifier, enabled],
+    );
+  }
+
   /// Check if SDK mode currently enabled.
   ///
   /// Note, SDK status check is supported by VeritySense starting from firmware 2.1.0

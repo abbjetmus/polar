@@ -202,6 +202,7 @@ class PolarPlugin :
             "doRestart" -> doRestart(call, result)
             "enableSdkMode" -> enableSdkMode(call, result)
             "disableSdkMode" -> disableSdkMode(call, result)
+            "setAutomaticOHRMeasurementEnabled" -> setAutomaticOHRMeasurementEnabled(call, result)
             "isSdkModeEnabled" -> isSdkModeEnabled(call, result)
             "getAvailableOfflineRecordingDataTypes" -> getAvailableOfflineRecordingDataTypes(
                 call,
@@ -562,6 +563,24 @@ class PolarPlugin :
                 }
             })
             
+    }
+
+    private fun setAutomaticOHRMeasurementEnabled(
+        call: MethodCall,
+        result: Result,
+    ) {
+        val args = call.arguments as List<*>
+        val identifier = args[0] as String
+        val enabled = args[1] as Boolean
+        wrapper.api
+            .setAutomaticOHRMeasurementEnabled(identifier, enabled)
+            .subscribe({
+                runOnUiThread { result.success(null) }
+            }, {
+                runOnUiThread {
+                    result.error(it.toString(), it.message, null)
+                }
+            })
     }
 
     private fun isSdkModeEnabled(

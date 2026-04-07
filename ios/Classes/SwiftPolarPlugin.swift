@@ -126,6 +126,8 @@ public class SwiftPolarPlugin:
         enableSdkMode(call, result)
       case "disableSdkMode":
         disableSdkMode(call, result)
+      case "setAutomaticOHRMeasurementEnabled":
+        setAutomaticOHRMeasurementEnabled(call, result)
       case "isSdkModeEnabled":
         isSdkModeEnabled(call, result)
       case "getAvailableOfflineRecordingDataTypes":
@@ -478,6 +480,22 @@ public class SwiftPolarPlugin:
         result(
           FlutterError(
             code: "Error disabling SDK mode", message: error.localizedDescription, details: nil))
+      })
+  }
+
+  func setAutomaticOHRMeasurementEnabled(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
+    let args = call.arguments as! [Any]
+    let identifier = args[0] as! String
+    let enabled = args[1] as! Bool
+    _ = api.setAutomaticOHRMeasurementEnabled(identifier, enabled: enabled).subscribe(
+      onCompleted: {
+        result(nil)
+      },
+      onError: { error in
+        result(
+          FlutterError(
+            code: "Error setting automatic OHR measurement", message: error.localizedDescription,
+            details: nil))
       })
   }
 
