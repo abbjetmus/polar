@@ -720,6 +720,31 @@ class Polar {
     throw Exception('Unexpected null result from getOfflineRecordingStatus');
   }
 
+  /// Sets the offline recording trigger on the device. The trigger persists
+  /// on the device and starts an offline recording automatically when the
+  /// configured event happens. On Polar 360 [PolarOfflineRecordingTriggerMode.triggerSystemStart]
+  /// fires when the device is unplugged from the charger.
+  ///
+  /// - Parameters:
+  ///   - identifier: Polar device id or address.
+  ///   - trigger: Trigger configuration (mode + features to record).
+  Future<void> setOfflineRecordingTrigger(
+    String identifier,
+    PolarOfflineRecordingTrigger trigger,
+  ) async {
+    final features = trigger.triggerFeatures.entries.map((e) {
+      return [
+        e.key.toJson(),
+        e.value != null ? jsonEncode(e.value) : null,
+      ];
+    }).toList();
+
+    await _methodChannel.invokeMethod(
+      'setOfflineRecordingTrigger',
+      [identifier, trigger.triggerMode.index, features],
+    );
+  }
+
   /// Lists all offline recordings available on a Polar device.
   ///
   /// - Parameters:

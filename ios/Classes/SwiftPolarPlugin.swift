@@ -140,6 +140,8 @@ public class SwiftPolarPlugin:
         stopOfflineRecording(call, result)
       case "getOfflineRecordingStatus":
         getOfflineRecordingStatus(call, result)
+      case "setOfflineRecordingTrigger":
+        setOfflineRecordingTrigger(call, result)
       case "listOfflineRecordings":
         listOfflineRecordings(call, result)
       case "getOfflineRecord":
@@ -746,6 +748,49 @@ public class SwiftPolarPlugin:
               code: "Error getting offline recording status", message: error.localizedDescription,
               details: nil)
           )
+        })
+  }
+
+  func setOfflineRecordingTrigger(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
+    let arguments = call.arguments as! [Any]
+    let identifier = arguments[0] as! String
+    let modeIndex = arguments[1] as! Int
+    let featuresList = arguments[2] as! [[Any?]]
+
+    let triggerModes: [PolarOfflineRecordingTriggerMode] = [
+      .triggerDisabled,
+      .triggerSystemStart,
+      .triggerExerciseStart,
+    ]
+    let mode = triggerModes[modeIndex]
+
+    var triggerFeatures: [PolarDeviceDataType: PolarSensorSetting?] = [:]
+    for entry in featuresList {
+      let featureIndex = entry[0] as! Int
+      let feature = PolarDeviceDataType.allCases[featureIndex]
+      let settingsJson = entry[1] as? String
+      let settings: PolarSensorSetting? =
+        settingsJson != nil
+        ? try? decoder.decode(
+          PolarSensorSettingCodable.self,
+          from: settingsJson!.data(using: .utf8)!
+        ).data : nil
+      triggerFeatures[feature] = settings
+    }
+
+    let trigger = PolarOfflineRecordingTrigger(
+      triggerMode: mode, triggerFeatures: triggerFeatures)
+
+    _ = api.setOfflineRecordingTrigger(identifier, trigger: trigger, secret: nil)
+      .subscribe(
+        onCompleted: {
+          result(nil)
+        },
+        onError: { error in
+          result(
+            FlutterError(
+              code: "Error setting offline recording trigger",
+              message: error.localizedDescription, details: nil))
         })
   }
 

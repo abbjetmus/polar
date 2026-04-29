@@ -32,6 +32,8 @@ import com.polar.sdk.api.model.PolarFirstTimeUseConfig
 import com.polar.sdk.api.model.PolarHealthThermometerData
 import com.polar.sdk.api.model.PolarHrData
 import com.polar.sdk.api.model.PolarOfflineRecordingEntry
+import com.polar.sdk.api.model.PolarOfflineRecordingTrigger
+import com.polar.sdk.api.model.PolarOfflineRecordingTriggerMode
 import com.polar.sdk.api.model.PolarSensorSetting
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -212,6 +214,7 @@ class PolarPlugin :
             "startOfflineRecording" -> startOfflineRecording(call, result)
             "stopOfflineRecording" -> stopOfflineRecording(call, result)
             "getOfflineRecordingStatus" -> getOfflineRecordingStatus(call, result)
+            "setOfflineRecordingTrigger" -> setOfflineRecordingTrigger(call, result)
             "listOfflineRecordings" -> listOfflineRecordings(call, result)
             "getOfflineRecord" -> getOfflineRecord(call, result)
             "removeOfflineRecord" -> removeOfflineRecord(call, result)
@@ -681,7 +684,38 @@ class PolarPlugin :
                     result.error(it.toString(), it.message, null)
                 }
             })
-            
+
+    }
+
+    private fun setOfflineRecordingTrigger(call: MethodCall, result: Result) {
+        val arguments = call.arguments as List<*>
+        val identifier = arguments[0] as String
+        val modeIndex = arguments[1] as Int
+        @Suppress("UNCHECKED_CAST")
+        val featuresList = arguments[2] as List<List<Any?>>
+
+        val mode = PolarOfflineRecordingTriggerMode.values()[modeIndex]
+
+        val triggerFeatures = mutableMapOf<PolarDeviceDataType, PolarSensorSetting?>()
+        for (entry in featuresList) {
+            val feature = gson.fromJson(entry[0] as String, PolarDeviceDataType::class.java)
+            val settings = (entry[1] as String?)?.let {
+                gson.fromJson(it, PolarSensorSetting::class.java)
+            }
+            triggerFeatures[feature] = settings
+        }
+
+        val trigger = PolarOfflineRecordingTrigger(mode, triggerFeatures)
+
+        wrapper.api
+            .setOfflineRecordingTrigger(identifier, trigger, null)
+            .subscribe({
+                runOnUiThread { result.success(null) }
+            }, {
+                runOnUiThread {
+                    result.error("ERROR_SETTING_TRIGGER", it.message, null)
+                }
+            })
     }
 
     private fun listOfflineRecordings(call: MethodCall, result: Result) {
