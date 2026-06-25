@@ -1093,6 +1093,59 @@ class Polar {
     }
   }
 
+  /// Gets the sleep analysis data for a specific date range.
+  ///
+  /// Uses the Polar device's dedicated sleep algorithm
+  /// (`PolarSleepApi.getSleep`), which is the reliable source of sleep
+  /// detection — unlike the `SLEEP` activity class in activity sample data.
+  ///
+  /// - Parameters:
+  ///   - identifier: Polar device id or address
+  ///   - fromDate: Start date for the range
+  ///   - toDate: End date for the range
+  /// - Returns: List of sleep analysis results for the given date range
+  ///   - success: Returns a list of sleep data (may be empty if no data available)
+  ///   - onError: Returns an empty list (no data is not an exceptional situation)
+  Future<List<PolarSleepData>> getSleep(
+    String identifier,
+    DateTime fromDate,
+    DateTime toDate,
+  ) async {
+    try {
+      final formattedFromDate = DateFormat('yyyy-MM-dd').format(fromDate);
+      final formattedToDate = DateFormat('yyyy-MM-dd').format(toDate);
+
+      final result = await _methodChannel.invokeMethod<String>(
+        'getSleep',
+        [
+          identifier,
+          formattedFromDate,
+          formattedToDate,
+        ],
+      );
+
+      // If result is null, return an empty list
+      if (result == null || result.isEmpty) {
+        return [];
+      }
+
+      // Try to parse the JSON response
+      try {
+        final data = jsonDecode(result) as List;
+        return data
+            .map((e) => PolarSleepData.fromJson(e as Map<String, dynamic>))
+            .toList();
+      } catch (e) {
+        debugPrint('Error parsing sleep data: $e');
+        return [];
+      }
+    } catch (e) {
+      debugPrint('Error getting sleep data: $e');
+      // Return empty list instead of throwing, as no data is not an exceptional situation
+      return [];
+    }
+  }
+
   /// Gets the distance data for a specific date range.
   ///
   /// - Parameters:

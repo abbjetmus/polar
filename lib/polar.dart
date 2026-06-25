@@ -17,6 +17,7 @@ export 'src/model/polar_offline_recording_data.dart';
 export 'src/model/polar_offline_recording_trigger.dart';
 export 'src/model/polar_first_time_use_config.dart';
 export 'src/model/polar_steps_data.dart';
+export 'src/model/polar_sleep_data.dart';
 export 'src/model/polar_distance_data.dart';
 export 'src/model/polar_active_time_data.dart';
 export 'src/model/polar_active_time.dart';

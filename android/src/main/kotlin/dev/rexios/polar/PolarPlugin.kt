@@ -227,6 +227,7 @@ class PolarPlugin :
             "deleteStoredDeviceData" -> deleteStoredDeviceData(call, result)
             "deleteDeviceDateFolders" -> deleteDeviceDateFolders(call, result)
             "getSteps" -> getSteps(call, result)
+            "getSleep" -> getSleep(call, result)
             "getDistance" -> getDistance(call, result)
             "getActiveTime" -> getActiveTime(call, result)
             "getActivitySampleData" -> getActivitySampleData(call, result)
@@ -1094,6 +1095,91 @@ class PolarPlugin :
         } catch (e: Exception) {
             android.util.Log.e("PolarPlugin", "Exception in getSteps", e)
             result.error("UNEXPECTED_ERROR", "Unexpected error in getSteps: ${e.message}", null)
+        }
+    }
+
+    private fun getSleep(call: MethodCall, result: Result) {
+        try {
+            android.util.Log.d("PolarPlugin", "getSleep called with arguments: ${call.arguments}")
+
+            val arguments = call.arguments as? List<*>
+            if (arguments == null) {
+                android.util.Log.e("PolarPlugin", "Arguments are null or not a List")
+                result.error("INVALID_ARGUMENTS", "Arguments must be a non-null List", null)
+                return
+            }
+
+            if (arguments.size < 3) {
+                android.util.Log.e("PolarPlugin", "Arguments list size is less than 3: ${arguments.size}")
+                result.error("INVALID_ARGUMENTS", "Expected 3 arguments: identifier, fromDate, toDate", null)
+                return
+            }
+
+            val identifier = arguments[0] as? String
+            if (identifier == null) {
+                android.util.Log.e("PolarPlugin", "Identifier is null or not a String")
+                result.error("INVALID_ARGUMENTS", "Device identifier must be a non-null String", null)
+                return
+            }
+
+            val fromDateString = arguments[1] as? String
+            if (fromDateString == null) {
+                android.util.Log.e("PolarPlugin", "fromDate is null or not a String")
+                result.error("INVALID_ARGUMENTS", "fromDate must be a non-null String", null)
+                return
+            }
+
+            val toDateString = arguments[2] as? String
+            if (toDateString == null) {
+                android.util.Log.e("PolarPlugin", "toDate is null or not a String")
+                result.error("INVALID_ARGUMENTS", "toDate must be a non-null String", null)
+                return
+            }
+
+            val fromDate = LocalDate.parse(fromDateString)
+            val toDate = LocalDate.parse(toDateString)
+
+            android.util.Log.d("PolarPlugin", "Calling Polar API getSleep with identifier=$identifier, fromDate=$fromDate, toDate=$toDate")
+
+            wrapper.api
+                .getSleep(identifier, fromDate, toDate)
+                .onErrorReturn { error ->
+                    android.util.Log.e("PolarPlugin", "Error in getSleep API call: ${error.message}", error)
+                    // No sleep data for the requested period is not an exceptional
+                    // situation — return an empty list instead of throwing.
+                    if (error.toString().contains("PftpResponseError") && error.toString().contains("Error: 103")) {
+                        android.util.Log.e("PolarPlugin", "PSFTP Protocol error 103 - likely no sleep data available for the requested period")
+                        emptyList()
+                    } else {
+                        throw error
+                    }
+                }
+                .subscribe({ sleepDataList: List<com.polar.sdk.api.model.sleep.PolarSleepData> ->
+                    android.util.Log.d("PolarPlugin", "Received sleep data: ${sleepDataList.size} entries")
+                    val response = sleepDataList.map { sleepData ->
+                        val analysis = sleepData.result
+                        mapOf(
+                            "date" to (sleepData.date?.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                                ?: analysis?.sleepResultDate?.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                                ?: ""),
+                            "sleepStartTime" to (analysis?.sleepStartTime?.toInstant()?.toString() ?: ""),
+                            "sleepEndTime" to (analysis?.sleepEndTime?.toInstant()?.toString() ?: "")
+                        )
+                    }
+                    runOnUiThread {
+                        android.util.Log.d("PolarPlugin", "Returning sleep data as JSON")
+                        result.success(gson.toJson(response))
+                    }
+                }, { error ->
+                    android.util.Log.e("PolarPlugin", "Error in getSleep subscription: ${error.message}", error)
+                    runOnUiThread {
+                        result.error("GET_SLEEP_ERROR", "Error fetching sleep data: ${error.message}", null)
+                    }
+                })
+
+        } catch (e: Exception) {
+            android.util.Log.e("PolarPlugin", "Exception in getSleep", e)
+            result.error("UNEXPECTED_ERROR", "Unexpected error in getSleep: ${e.message}", null)
         }
     }
 

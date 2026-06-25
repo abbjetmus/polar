@@ -166,6 +166,8 @@ public class SwiftPolarPlugin:
         deleteDeviceDateFolders(call, result)
       case "getSteps":
         getSteps(call, result)
+      case "getSleep":
+        getSleep(call, result)
       case "getDistance":
         getDistance(call, result)
       case "getActiveTime":
@@ -1290,6 +1292,89 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "ERROR_GETTING_STEPS",
+              message: error.localizedDescription,
+              details: nil))
+        }
+      )
+  }
+
+  func getSleep(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
+    guard let arguments = call.arguments as? [Any],
+      arguments.count == 3,
+      let identifier = arguments[0] as? String,
+      let fromDateString = arguments[1] as? String,
+      let toDateString = arguments[2] as? String
+    else {
+      result(
+        FlutterError(
+          code: "INVALID_ARGUMENTS",
+          message: "Expected [identifier, fromDate, toDate]",
+          details: nil))
+      return
+    }
+
+    let dateFormatter = DateFormatter()
+    dateFormatter.dateFormat = "yyyy-MM-dd"
+
+    guard let fromDate = dateFormatter.date(from: fromDateString),
+      let toDate = dateFormatter.date(from: toDateString)
+    else {
+      result(
+        FlutterError(
+          code: "INVALID_DATE_FORMAT",
+          message: "Dates must be in yyyy-MM-dd format",
+          details: nil))
+      return
+    }
+
+    _ = api.getSleep(identifier: identifier, fromDate: fromDate, toDate: toDate)
+      .subscribe(
+        onSuccess: { sleepData in
+          let isoFormatter = ISO8601DateFormatter()
+          let dayFormatter = DateFormatter()
+          dayFormatter.dateFormat = "yyyy-MM-dd"
+
+          let mapped: [[String: String]] = sleepData.map { analysis in
+            let start = analysis.sleepStartTime
+            let end = analysis.sleepEndTime
+            // Prefer the device-provided result date; fall back to the wake date.
+            var dateString = ""
+            if let comps = analysis.sleepResultDate,
+              let resultDate = Calendar.current.date(from: comps) {
+              dateString = dayFormatter.string(from: resultDate)
+            } else if let end = end {
+              dateString = dayFormatter.string(from: end)
+            }
+            return [
+              "date": dateString,
+              "sleepStartTime": start.map { isoFormatter.string(from: $0) } ?? "",
+              "sleepEndTime": end.map { isoFormatter.string(from: $0) } ?? "",
+            ]
+          }
+
+          do {
+            let jsonData = try JSONSerialization.data(withJSONObject: mapped, options: [])
+            if let jsonString = String(data: jsonData, encoding: .utf8) {
+              result(jsonString)
+            } else {
+              result(
+                FlutterError(
+                  code: "ENCODING_ERROR",
+                  message: "Failed to convert JSON data to string",
+                  details: nil))
+            }
+          } catch {
+            result(
+              FlutterError(
+                code: "ENCODING_ERROR",
+                message: "Failed to encode sleep data: \(error.localizedDescription)",
+                details: nil))
+          }
+        },
+        onFailure: { error in
+          result(
+            FlutterError(
+              code: "ERROR_GETTING_SLEEP",
               message: error.localizedDescription,
               details: nil))
         }
