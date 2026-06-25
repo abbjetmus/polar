@@ -1115,6 +1115,11 @@ class Polar {
       final formattedFromDate = DateFormat('yyyy-MM-dd').format(fromDate);
       final formattedToDate = DateFormat('yyyy-MM-dd').format(toDate);
 
+      debugPrint(
+        '[Polar.getSleep] invoking native getSleep: identifier=$identifier, '
+        'from=$formattedFromDate, to=$formattedToDate',
+      );
+
       final result = await _methodChannel.invokeMethod<String>(
         'getSleep',
         [
@@ -1124,23 +1129,34 @@ class Polar {
         ],
       );
 
+      debugPrint(
+        '[Polar.getSleep] native returned: '
+        '${result == null ? 'null' : '${result.length} chars'} -> $result',
+      );
+
       // If result is null, return an empty list
       if (result == null || result.isEmpty) {
+        debugPrint('[Polar.getSleep] empty/null result, returning []');
         return [];
       }
 
       // Try to parse the JSON response
       try {
         final data = jsonDecode(result) as List;
-        return data
+        final parsed = data
             .map((e) => PolarSleepData.fromJson(e as Map<String, dynamic>))
             .toList();
+        debugPrint(
+          '[Polar.getSleep] parsed ${parsed.length} sleep entr(ies): '
+          '${parsed.map((s) => '{date:${s.date}, start:${s.sleepStartTime}, end:${s.sleepEndTime}}').join(', ')}',
+        );
+        return parsed;
       } catch (e) {
-        debugPrint('Error parsing sleep data: $e');
+        debugPrint('[Polar.getSleep] Error parsing sleep data: $e');
         return [];
       }
     } catch (e) {
-      debugPrint('Error getting sleep data: $e');
+      debugPrint('[Polar.getSleep] Error getting sleep data: $e');
       // Return empty list instead of throwing, as no data is not an exceptional situation
       return [];
     }

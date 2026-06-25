@@ -1155,20 +1155,34 @@ class PolarPlugin :
                     }
                 }
                 .subscribe({ sleepDataList: List<com.polar.sdk.api.model.sleep.PolarSleepData> ->
-                    android.util.Log.d("PolarPlugin", "Received sleep data: ${sleepDataList.size} entries")
-                    val response = sleepDataList.map { sleepData ->
+                    android.util.Log.d("PolarPlugin", "getSleep: received ${sleepDataList.size} entries from device")
+                    // The device returns one entry per day in the requested range,
+                    // most with no actual sleep (null start/end). Keep only entries
+                    // with a real sleep period so the payload carries real sleep only.
+                    val response = sleepDataList.mapNotNull { sleepData ->
                         val analysis = sleepData.result
-                        mapOf(
-                            "date" to (sleepData.date?.format(DateTimeFormatter.ISO_LOCAL_DATE)
-                                ?: analysis?.sleepResultDate?.format(DateTimeFormatter.ISO_LOCAL_DATE)
-                                ?: ""),
-                            "sleepStartTime" to (analysis?.sleepStartTime?.toInstant()?.toString() ?: ""),
-                            "sleepEndTime" to (analysis?.sleepEndTime?.toInstant()?.toString() ?: "")
-                        )
+                        val start = analysis?.sleepStartTime
+                        val end = analysis?.sleepEndTime
+                        if (start == null || end == null) {
+                            null
+                        } else {
+                            mapOf(
+                                "date" to (sleepData.date?.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                                    ?: analysis.sleepResultDate?.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                                    ?: ""),
+                                "sleepStartTime" to start.toInstant().toString(),
+                                "sleepEndTime" to end.toInstant().toString()
+                            )
+                        }
                     }
+                    android.util.Log.d(
+                        "PolarPlugin",
+                        "getSleep: ${response.size} entr(ies) with real sleep after filtering ${sleepDataList.size} day(s)"
+                    )
                     runOnUiThread {
-                        android.util.Log.d("PolarPlugin", "Returning sleep data as JSON")
-                        result.success(gson.toJson(response))
+                        val json = gson.toJson(response)
+                        android.util.Log.d("PolarPlugin", "getSleep: returning JSON -> $json")
+                        result.success(json)
                     }
                 }, { error ->
                     android.util.Log.e("PolarPlugin", "Error in getSleep subscription: ${error.message}", error)

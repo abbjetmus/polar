@@ -1334,21 +1334,27 @@ public class SwiftPolarPlugin:
           let dayFormatter = DateFormatter()
           dayFormatter.dateFormat = "yyyy-MM-dd"
 
-          let mapped: [[String: String]] = sleepData.map { analysis in
-            let start = analysis.sleepStartTime
-            let end = analysis.sleepEndTime
+          // The device returns one entry per day in the requested range, most
+          // with no actual sleep (nil start/end). Keep only entries with a real
+          // sleep period so the payload carries real sleep only.
+          let mapped: [[String: String]] = sleepData.compactMap { analysis in
+            guard let start = analysis.sleepStartTime,
+              let end = analysis.sleepEndTime
+            else {
+              return nil
+            }
             // Prefer the device-provided result date; fall back to the wake date.
-            var dateString = ""
+            let dateString: String
             if let comps = analysis.sleepResultDate,
               let resultDate = Calendar.current.date(from: comps) {
               dateString = dayFormatter.string(from: resultDate)
-            } else if let end = end {
+            } else {
               dateString = dayFormatter.string(from: end)
             }
             return [
               "date": dateString,
-              "sleepStartTime": start.map { isoFormatter.string(from: $0) } ?? "",
-              "sleepEndTime": end.map { isoFormatter.string(from: $0) } ?? "",
+              "sleepStartTime": isoFormatter.string(from: start),
+              "sleepEndTime": isoFormatter.string(from: end),
             ]
           }
 
