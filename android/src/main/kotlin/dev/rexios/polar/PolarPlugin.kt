@@ -1187,35 +1187,46 @@ class PolarPlugin :
                     // The device returns one entry per day in the requested range,
                     // most with no actual sleep (null start/end). Keep only entries
                     // with a real sleep period so the payload carries real sleep only.
-                    val response = sleepDataList.mapNotNull { sleepData ->
-                        val analysis = sleepData.result
-                        val start = analysis?.sleepStartTime
-                        val end = analysis?.sleepEndTime
-                        if (start == null || end == null) {
-                            null
-                        } else {
-                            mapOf<String, Any?>(
-                                "date" to (sleepData.date?.format(DateTimeFormatter.ISO_LOCAL_DATE)
-                                    ?: analysis.sleepResultDate?.format(DateTimeFormatter.ISO_LOCAL_DATE)
-                                    ?: ""),
-                                "sleepStartTime" to start.toInstant().toString(),
-                                "sleepEndTime" to end.toInstant().toString(),
-                                "sleepGoalMinutes" to analysis.sleepGoalMinutes,
-                                "userSleepRating" to analysis.userSleepRating?.value,
-                                "sleepWakePhases" to (analysis.sleepWakePhases?.map { phase ->
-                                    mapOf<String, Any?>(
-                                        "offsetSeconds" to phase.secondsFromSleepStart,
-                                        "state" to phase.state.name
-                                    )
-                                } ?: emptyList()),
-                                "sleepCycles" to (analysis.sleepCycles?.map { cycle ->
-                                    mapOf<String, Any?>(
-                                        "offsetSeconds" to cycle.secondsFromSleepStart,
-                                        "sleepDepthStart" to cycle.sleepDepthStart
-                                    )
-                                } ?: emptyList())
+                    // Built imperatively with fully explicit types: the device returns
+                    // one entry per day in the range, most with no actual sleep (null
+                    // start/end), so we keep only entries with a real sleep period.
+                    val response = ArrayList<Map<String, Any?>>()
+                    for (sleepData in sleepDataList) {
+                        val analysis = sleepData.result ?: continue
+                        val start = analysis.sleepStartTime ?: continue
+                        val end = analysis.sleepEndTime ?: continue
+
+                        val phases = ArrayList<Map<String, Any?>>()
+                        analysis.sleepWakePhases?.forEach { phase ->
+                            phases.add(
+                                mapOf<String, Any?>(
+                                    "offsetSeconds" to phase.secondsFromSleepStart,
+                                    "state" to phase.state.name
+                                )
                             )
                         }
+
+                        val cycles = ArrayList<Map<String, Any?>>()
+                        analysis.sleepCycles?.forEach { cycle ->
+                            cycles.add(
+                                mapOf<String, Any?>(
+                                    "offsetSeconds" to cycle.secondsFromSleepStart,
+                                    "sleepDepthStart" to cycle.sleepDepthStart
+                                )
+                            )
+                        }
+
+                        val entry = HashMap<String, Any?>()
+                        entry["date"] = (sleepData.date?.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                            ?: analysis.sleepResultDate?.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                            ?: "")
+                        entry["sleepStartTime"] = start.toInstant().toString()
+                        entry["sleepEndTime"] = end.toInstant().toString()
+                        entry["sleepGoalMinutes"] = analysis.sleepGoalMinutes
+                        entry["userSleepRating"] = analysis.userSleepRating?.value
+                        entry["sleepWakePhases"] = phases
+                        entry["sleepCycles"] = cycles
+                        response.add(entry)
                     }
                     android.util.Log.d(
                         "PolarPlugin",
