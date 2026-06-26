@@ -168,6 +168,10 @@ public class SwiftPolarPlugin:
         getSteps(call, result)
       case "getSleep":
         getSleep(call, result)
+      case "getSleepRecordingState":
+        getSleepRecordingState(call, result)
+      case "stopSleepRecording":
+        stopSleepRecording(call, result)
       case "getDistance":
         getDistance(call, result)
       case "getActiveTime":
@@ -1296,6 +1300,34 @@ public class SwiftPolarPlugin:
               details: nil))
         }
       )
+  }
+
+  func getSleepRecordingState(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
+    let identifier = call.arguments as! String
+    _ = api.getSleepRecordingState(identifier: identifier).subscribe(
+      onSuccess: {
+        result($0)
+      },
+      onFailure: { error in
+        result(
+          FlutterError(
+            code: "Error getting sleep recording state",
+            message: error.localizedDescription, details: nil))
+      })
+  }
+
+  func stopSleepRecording(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
+    let identifier = call.arguments as! String
+    _ = api.stopSleepRecording(identifier: identifier).subscribe(
+      onCompleted: {
+        result(nil)
+      },
+      onError: { error in
+        result(
+          FlutterError(
+            code: "Error stopping sleep recording",
+            message: error.localizedDescription, details: nil))
+      })
   }
 
   func getSleep(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {

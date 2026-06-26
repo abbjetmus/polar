@@ -228,6 +228,8 @@ class PolarPlugin :
             "deleteDeviceDateFolders" -> deleteDeviceDateFolders(call, result)
             "getSteps" -> getSteps(call, result)
             "getSleep" -> getSleep(call, result)
+            "getSleepRecordingState" -> getSleepRecordingState(call, result)
+            "stopSleepRecording" -> stopSleepRecording(call, result)
             "getDistance" -> getDistance(call, result)
             "getActiveTime" -> getActiveTime(call, result)
             "getActivitySampleData" -> getActivitySampleData(call, result)
@@ -1096,6 +1098,32 @@ class PolarPlugin :
             android.util.Log.e("PolarPlugin", "Exception in getSteps", e)
             result.error("UNEXPECTED_ERROR", "Unexpected error in getSteps: ${e.message}", null)
         }
+    }
+
+    private fun getSleepRecordingState(call: MethodCall, result: Result) {
+        val identifier = call.arguments as String
+        wrapper.api
+            .getSleepRecordingState(identifier)
+            .subscribe({
+                android.util.Log.d("PolarPlugin", "getSleepRecordingState=$it")
+                runOnUiThread { result.success(it) }
+            }, {
+                android.util.Log.e("PolarPlugin", "Error in getSleepRecordingState: ${it.message}", it)
+                runOnUiThread { result.error(it.toString(), it.message, null) }
+            })
+    }
+
+    private fun stopSleepRecording(call: MethodCall, result: Result) {
+        val identifier = call.arguments as String
+        wrapper.api
+            .stopSleepRecording(identifier)
+            .subscribe({
+                android.util.Log.d("PolarPlugin", "stopSleepRecording completed")
+                runOnUiThread { result.success(null) }
+            }, {
+                android.util.Log.e("PolarPlugin", "Error in stopSleepRecording: ${it.message}", it)
+                runOnUiThread { result.error(it.toString(), it.message, null) }
+            })
     }
 
     private fun getSleep(call: MethodCall, result: Result) {

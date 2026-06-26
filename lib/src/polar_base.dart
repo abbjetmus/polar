@@ -1093,6 +1093,30 @@ class Polar {
     }
   }
 
+  /// Returns whether sleep recording is currently ongoing on the device.
+  ///
+  /// Per Polar's sync guideline, a night's sleep analysis only becomes
+  /// available via [getSleep] after the device has stopped sleep recording for
+  /// it. Use this to check finalization before reading.
+  Future<bool> getSleepRecordingState(String identifier) async {
+    final result = await _methodChannel.invokeMethod<bool>(
+      'getSleepRecordingState',
+      identifier,
+    );
+    return result ?? false;
+  }
+
+  /// Stops the ongoing sleep recording so the device finalizes the latest
+  /// night's sleep analysis, making it available via [getSleep].
+  ///
+  /// Normally the device stops recording (and finalizes) within ~90 minutes of
+  /// waking; calling this forces finalization so the night can be read on the
+  /// same sync. After stopping, poll [getSleepRecordingState] until it returns
+  /// false before calling [getSleep].
+  Future<void> stopSleepRecording(String identifier) {
+    return _methodChannel.invokeMethod('stopSleepRecording', identifier);
+  }
+
   /// Gets the sleep analysis data for a specific date range.
   ///
   /// Uses the Polar device's dedicated sleep algorithm
