@@ -1194,7 +1194,7 @@ class PolarPlugin :
                         if (start == null || end == null) {
                             null
                         } else {
-                            mapOf(
+                            mapOf<String, Any?>(
                                 "date" to (sleepData.date?.format(DateTimeFormatter.ISO_LOCAL_DATE)
                                     ?: analysis.sleepResultDate?.format(DateTimeFormatter.ISO_LOCAL_DATE)
                                     ?: ""),
@@ -1203,13 +1203,13 @@ class PolarPlugin :
                                 "sleepGoalMinutes" to analysis.sleepGoalMinutes,
                                 "userSleepRating" to analysis.userSleepRating?.value,
                                 "sleepWakePhases" to (analysis.sleepWakePhases?.map { phase ->
-                                    mapOf(
+                                    mapOf<String, Any?>(
                                         "offsetSeconds" to phase.secondsFromSleepStart,
                                         "state" to phase.state.name
                                     )
                                 } ?: emptyList()),
                                 "sleepCycles" to (analysis.sleepCycles?.map { cycle ->
-                                    mapOf(
+                                    mapOf<String, Any?>(
                                         "offsetSeconds" to cycle.secondsFromSleepStart,
                                         "sleepDepthStart" to cycle.sleepDepthStart
                                     )
