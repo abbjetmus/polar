@@ -1199,7 +1199,21 @@ class PolarPlugin :
                                     ?: analysis.sleepResultDate?.format(DateTimeFormatter.ISO_LOCAL_DATE)
                                     ?: ""),
                                 "sleepStartTime" to start.toInstant().toString(),
-                                "sleepEndTime" to end.toInstant().toString()
+                                "sleepEndTime" to end.toInstant().toString(),
+                                "sleepGoalMinutes" to analysis.sleepGoalMinutes,
+                                "userSleepRating" to analysis.userSleepRating?.value,
+                                "sleepWakePhases" to (analysis.sleepWakePhases?.map { phase ->
+                                    mapOf(
+                                        "offsetSeconds" to phase.secondsFromSleepStart,
+                                        "state" to phase.state.name
+                                    )
+                                } ?: emptyList()),
+                                "sleepCycles" to (analysis.sleepCycles?.map { cycle ->
+                                    mapOf(
+                                        "offsetSeconds" to cycle.secondsFromSleepStart,
+                                        "sleepDepthStart" to cycle.sleepDepthStart
+                                    )
+                                } ?: emptyList())
                             )
                         }
                     }

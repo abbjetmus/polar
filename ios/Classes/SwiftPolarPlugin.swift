@@ -1369,7 +1369,7 @@ public class SwiftPolarPlugin:
           // The device returns one entry per day in the requested range, most
           // with no actual sleep (nil start/end). Keep only entries with a real
           // sleep period so the payload carries real sleep only.
-          let mapped: [[String: String]] = sleepData.compactMap { analysis in
+          let mapped: [[String: Any]] = sleepData.compactMap { analysis in
             guard let start = analysis.sleepStartTime,
               let end = analysis.sleepEndTime
             else {
@@ -1383,11 +1383,32 @@ public class SwiftPolarPlugin:
             } else {
               dateString = dayFormatter.string(from: end)
             }
-            return [
+            let phases: [[String: Any]] = (analysis.sleepWakePhases ?? []).map { phase in
+              [
+                "offsetSeconds": Int(phase.secondsFromSleepStart),
+                "state": phase.state.rawValue,
+              ]
+            }
+            let cycles: [[String: Any]] = (analysis.sleepCycles ?? []).map { cycle in
+              [
+                "offsetSeconds": Int(cycle.secondsFromSleepStart),
+                "sleepDepthStart": cycle.sleepDepthStart,
+              ]
+            }
+            var entry: [String: Any] = [
               "date": dateString,
               "sleepStartTime": isoFormatter.string(from: start),
               "sleepEndTime": isoFormatter.string(from: end),
+              "sleepWakePhases": phases,
+              "sleepCycles": cycles,
             ]
+            if let goal = analysis.sleepGoalMinutes {
+              entry["sleepGoalMinutes"] = Int(goal)
+            }
+            if let rating = analysis.userSleepRating {
+              entry["userSleepRating"] = rating.rawValue
+            }
+            return entry
           }
 
           do {
