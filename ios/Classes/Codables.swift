@@ -584,6 +584,18 @@ class PolarOfflineRecordingDataCodable: Encodable {
         case .emptyData(startTime: let startTime):
             try container.encode("emptyData", forKey: .type)
             try container.encode(startTime.millisecondsSince1970, forKey: .startTime)
+
+        // New in PolarBleSdk 8.x. Never produced for the data types this plugin
+        // requests, but the switch must stay exhaustive.
+        case .derivedAccOfflineRecordingData(let derivedAccData, let startTime, let settings):
+            try container.encode("derivedAccOfflineRecordingData", forKey: .type)
+            let derivedAccDataCodable = PolarDataCodable(derivedAccData)
+            try container.encode(derivedAccDataCodable, forKey: .data)
+            try container.encode(startTime.millisecondsSince1970, forKey: .startTime)
+            if let settings = settings {
+                let settingsCodable = PolarSensorSettingCodable(settings)
+                try container.encode(settingsCodable, forKey: .settings)
+            }
         }
     }
 }

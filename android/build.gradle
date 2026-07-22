@@ -2,7 +2,7 @@ group 'dev.rexios.polar'
 version '1.0-SNAPSHOT'
 
 buildscript {
-    ext.kotlin_version = '1.9.0'
+    ext.kotlin_version = '2.1.20'
     repositories {
         google()
         mavenCentral()
@@ -53,12 +53,12 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
 
     // Polar SDK with explicit version
-    api 'com.github.polarofficial:polar-ble-sdk:6.16.1'
-    
-    // RxJava dependencies
-    implementation 'io.reactivex.rxjava3:rxjava:3.1.6'
-    implementation 'io.reactivex.rxjava3:rxandroid:3.0.2'
-    
+    api 'com.github.polarofficial:polar-ble-sdk:8.1.0'
+
+    // Kotlin Coroutines (SDK 8.x is coroutine/Flow based)
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
+
+
     implementation 'com.google.code.gson:gson:2.10'
     
     // Add Android SDK dependencies that might be needed

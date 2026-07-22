@@ -1,7 +1,6 @@
 import CoreBluetooth
 import Flutter
 import PolarBleSdk
-import RxSwift
 import UIKit
 
 private let encoder = JSONEncoder()
@@ -15,6 +14,17 @@ private func jsonEncode(_ value: Encodable) -> String? {
   }
 
   return data
+}
+
+/// Invoke a FlutterResult / FlutterEventSink payload on the main thread.
+/// The Polar BLE SDK 8.x delivers values on the cooperative thread pool,
+/// while Flutter platform channel callbacks must run on the main thread.
+private func onMain(_ block: @escaping () -> Void) {
+  if Thread.isMainThread {
+    block()
+  } else {
+    DispatchQueue.main.async(execute: block)
+  }
 }
 
 public class SwiftPolarPlugin:
@@ -101,7 +111,7 @@ public class SwiftPolarPlugin:
       case "getAvailableOnlineStreamDataTypes":
         getAvailableOnlineStreamDataTypes(call, result)
       case "requestStreamSettings":
-        try requestStreamSettings(call, result)
+        requestStreamSettings(call, result)
       case "createStreamingChannel":
         createStreamingChannel(call, result)
       case "startRecording":
@@ -208,36 +218,42 @@ public class SwiftPolarPlugin:
     return nil
   }
 
-  var searchSubscription: Disposable?
+  var searchTask: Task<Void, Never>?
   lazy var searchHandler = StreamHandler(
     onListen: { _, events in
       self.initApi()
 
-      self.searchSubscription = self.api.searchForDevice().subscribe(
-        onNext: { data in
-          guard let data = jsonEncode(PolarDeviceInfoCodable(data))
-          else { return }
-          DispatchQueue.main.async {
-            events(data)
+      self.searchTask = Task {
+        do {
+          for try await data in self.api.searchForDevice() {
+            guard let data = jsonEncode(PolarDeviceInfoCodable(data))
+            else { continue }
+            onMain {
+              events(data)
+            }
           }
-        },
-        onError: { error in
-          DispatchQueue.main.async {
-            events(
-              FlutterError(
-                code: "Error in searchForDevice", message: error.localizedDescription, details: nil)
-            )
+          if !Task.isCancelled {
+            onMain {
+              events(FlutterEndOfEventStream)
+            }
           }
-        },
-        onCompleted: {
-          DispatchQueue.main.async {
-            events(FlutterEndOfEventStream)
+        } catch {
+          if !Task.isCancelled {
+            onMain {
+              events(
+                FlutterError(
+                  code: "Error in searchForDevice", message: error.localizedDescription,
+                  details: nil)
+              )
+            }
           }
-        })
+        }
+      }
       return nil
     },
     onCancel: { _ in
-      self.searchSubscription?.dispose()
+      self.searchTask?.cancel()
+      self.searchTask = nil
       return nil
     })
 
@@ -260,44 +276,56 @@ public class SwiftPolarPlugin:
   ) {
     let identifier = call.arguments as! String
 
-    _ = api.getAvailableOnlineStreamDataTypes(identifier).subscribe(
-      onSuccess: { data in
-        guard let data = jsonEncode(data.map { PolarDeviceDataType.allCases.firstIndex(of: $0)! })
+    Task {
+      do {
+        let dataTypes = try await api.getAvailableOnlineStreamDataTypes(identifier)
+        guard
+          let data = jsonEncode(dataTypes.map { PolarDeviceDataType.allCases.firstIndex(of: $0)! })
         else {
-          result(
+          onMain {
             result(
               FlutterError(
                 code: "Unable to get available online stream data types", message: nil, details: nil
-              )))
+              ))
+          }
           return
         }
-        result(data)
-      },
-      onFailure: {
-        result(
-          FlutterError(
-            code: "Unable to get available online stream data types",
-            message: $0.localizedDescription, details: nil))
-      })
+        onMain {
+          result(data)
+        }
+      } catch {
+        onMain {
+          result(
+            FlutterError(
+              code: "Unable to get available online stream data types",
+              message: error.localizedDescription, details: nil))
+        }
+      }
+    }
   }
 
-  func requestStreamSettings(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) throws {
+  func requestStreamSettings(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
     let arguments = call.arguments as! [Any]
     let identifier = arguments[0] as! String
     let feature = PolarDeviceDataType.allCases[arguments[1] as! Int]
 
-    _ = api.requestStreamSettings(identifier, feature: feature).subscribe(
-      onSuccess: { data in
-        guard let data = jsonEncode(PolarSensorSettingCodable(data))
+    Task {
+      do {
+        let settings = try await api.requestStreamSettings(identifier, feature: feature)
+        guard let data = jsonEncode(PolarSensorSettingCodable(settings))
         else { return }
-        result(data)
-      },
-      onFailure: {
-        result(
-          FlutterError(
-            code: "Unable to request stream settings", message: $0.localizedDescription,
-            details: nil))
-      })
+        onMain {
+          result(data)
+        }
+      } catch {
+        onMain {
+          result(
+            FlutterError(
+              code: "Unable to request stream settings", message: error.localizedDescription,
+              details: nil))
+        }
+      }
+    }
   }
 
   func startRecording(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -307,71 +335,89 @@ public class SwiftPolarPlugin:
     let interval = RecordingInterval(rawValue: arguments[2] as! Int)!
     let sampleType = SampleType(rawValue: arguments[3] as! Int)!
 
-    _ = api.startRecording(
-      identifier,
-      exerciseId: exerciseId,
-      interval: interval,
-      sampleType: sampleType
-    ).subscribe(
-      onCompleted: {
-        result(nil)
-      },
-      onError: { error in
-        result(
-          FlutterError(
-            code: "Error starting recording", message: error.localizedDescription, details: nil))
-      })
+    Task {
+      do {
+        try await api.startRecording(
+          identifier,
+          exerciseId: exerciseId,
+          interval: interval,
+          sampleType: sampleType
+        )
+        onMain {
+          result(nil)
+        }
+      } catch {
+        onMain {
+          result(
+            FlutterError(
+              code: "Error starting recording", message: error.localizedDescription, details: nil))
+        }
+      }
+    }
   }
 
   func stopRecording(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
     let identifier = call.arguments as! String
 
-    _ = api.stopRecording(identifier).subscribe(
-      onCompleted: {
-        result(nil)
-      },
-      onError: { error in
-        result(
-          FlutterError(
-            code: "Error stopping recording", message: error.localizedDescription, details: nil))
-      })
+    Task {
+      do {
+        try await api.stopRecording(identifier)
+        onMain {
+          result(nil)
+        }
+      } catch {
+        onMain {
+          result(
+            FlutterError(
+              code: "Error stopping recording", message: error.localizedDescription, details: nil))
+        }
+      }
+    }
   }
 
   func requestRecordingStatus(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
     let identifier = call.arguments as! String
 
-    _ = api.requestRecordingStatus(identifier).subscribe(
-      onSuccess: { data in
-        result([data.ongoing, data.entryId])
-      },
-      onFailure: { error in
-        result(
-          FlutterError(
-            code: "Error stopping recording", message: error.localizedDescription, details: nil))
-      })
+    Task {
+      do {
+        let data = try await api.requestRecordingStatus(identifier)
+        onMain {
+          result([data.ongoing, data.entryId])
+        }
+      } catch {
+        onMain {
+          result(
+            FlutterError(
+              code: "Error stopping recording", message: error.localizedDescription, details: nil))
+        }
+      }
+    }
   }
 
   func listExercises(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
     let identifier = call.arguments as! String
 
-    var exercises = [String]()
-    _ = api.fetchStoredExerciseList(identifier).subscribe(
-      onNext: { data in
-        guard let data = jsonEncode(PolarExerciseEntryCodable(data))
-        else {
-          return
+    Task {
+      do {
+        var exercises = [String]()
+        for try await data in api.fetchStoredExerciseList(identifier) {
+          guard let data = jsonEncode(PolarExerciseEntryCodable(data))
+          else {
+            continue
+          }
+          exercises.append(data)
         }
-        exercises.append(data)
-      },
-      onError: { error in
-        result(
-          FlutterError(
-            code: "Error listing exercises", message: error.localizedDescription, details: nil))
-      },
-      onCompleted: {
-        result(exercises)
+        onMain {
+          result(exercises)
+        }
+      } catch {
+        onMain {
+          result(
+            FlutterError(
+              code: "Error listing exercises", message: error.localizedDescription, details: nil))
+        }
       }
-    )
+    }
   }
 
   func fetchExercise(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -383,19 +429,24 @@ public class SwiftPolarPlugin:
         .data(using: .utf8)!
     ).data
 
-    _ = api.fetchExercise(identifier, entry: entry).subscribe(
-      onSuccess: { data in
+    Task {
+      do {
+        let data = try await api.fetchExercise(identifier, entry: entry)
         guard let data = jsonEncode(PolarExerciseDataCodable(data))
         else {
           return
         }
-        result(data)
-      },
-      onFailure: { error in
-        result(
-          FlutterError(
-            code: "Error  fetching exercise", message: error.localizedDescription, details: nil))
-      })
+        onMain {
+          result(data)
+        }
+      } catch {
+        onMain {
+          result(
+            FlutterError(
+              code: "Error  fetching exercise", message: error.localizedDescription, details: nil))
+        }
+      }
+    }
   }
 
   func removeExercise(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -407,15 +458,20 @@ public class SwiftPolarPlugin:
         .data(using: .utf8)!
     ).data
 
-    _ = api.removeExercise(identifier, entry: entry).subscribe(
-      onCompleted: {
-        result(nil)
-      },
-      onError: { error in
-        result(
-          FlutterError(
-            code: "Error removing exercise", message: error.localizedDescription, details: nil))
-      })
+    Task {
+      do {
+        try await api.removeExercise(identifier, entry: entry)
+        onMain {
+          result(nil)
+        }
+      } catch {
+        onMain {
+          result(
+            FlutterError(
+              code: "Error removing exercise", message: error.localizedDescription, details: nil))
+        }
+      }
+    }
   }
 
   func setLedConfig(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -426,99 +482,141 @@ public class SwiftPolarPlugin:
       from: (arguments[1] as! String)
         .data(using: .utf8)!
     ).data
-    _ = api.setLedConfig(identifier, ledConfig: config).subscribe(
-      onCompleted: {
-        result(nil)
-      },
-      onError: { error in
-        result(
-          FlutterError(
-            code: "Error setting led config", message: error.localizedDescription, details: nil))
-      })
+
+    Task {
+      do {
+        try await api.setLedConfig(identifier, ledConfig: config)
+        onMain {
+          result(nil)
+        }
+      } catch {
+        onMain {
+          result(
+            FlutterError(
+              code: "Error setting led config", message: error.localizedDescription, details: nil))
+        }
+      }
+    }
   }
 
   func doFactoryReset(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
     let identifier = call.arguments as! String
-    _ = api.doFactoryReset(identifier)
-      .subscribe(
-        onCompleted: {
+
+    Task {
+      do {
+        try await api.doFactoryReset(identifier)
+        onMain {
           result(nil)
-        },
-        onError: { error in
+        }
+      } catch {
+        onMain {
           result(
             FlutterError(
               code: "Error doing factory reset", message: error.localizedDescription, details: nil))
-        })
+        }
+      }
+    }
   }
 
   func doRestart(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
     let identifier = call.arguments as! String
-    _ = api.doRestart(identifier, preservePairingInformation: false)
-      .subscribe(
-        onCompleted: {
+
+    Task {
+      do {
+        try await api.doRestart(identifier, preservePairingInformation: false)
+        onMain {
           result(nil)
-        },
-        onError: { error in
+        }
+      } catch {
+        onMain {
           result(
             FlutterError(
               code: "Error doing restart", message: error.localizedDescription, details: nil))
-        })
+        }
+      }
+    }
   }
 
   func enableSdkMode(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
     let identifier = call.arguments as! String
-    _ = api.enableSDKMode(identifier).subscribe(
-      onCompleted: {
-        result(nil)
-      },
-      onError: { error in
-        result(
-          FlutterError(
-            code: "Error enabling SDK mode", message: error.localizedDescription, details: nil))
-      })
+
+    Task {
+      do {
+        try await api.enableSDKMode(identifier)
+        onMain {
+          result(nil)
+        }
+      } catch {
+        onMain {
+          result(
+            FlutterError(
+              code: "Error enabling SDK mode", message: error.localizedDescription, details: nil))
+        }
+      }
+    }
   }
 
   func disableSdkMode(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
     let identifier = call.arguments as! String
-    _ = api.disableSDKMode(identifier).subscribe(
-      onCompleted: {
-        result(nil)
-      },
-      onError: { error in
-        result(
-          FlutterError(
-            code: "Error disabling SDK mode", message: error.localizedDescription, details: nil))
-      })
+
+    Task {
+      do {
+        try await api.disableSDKMode(identifier)
+        onMain {
+          result(nil)
+        }
+      } catch {
+        onMain {
+          result(
+            FlutterError(
+              code: "Error disabling SDK mode", message: error.localizedDescription, details: nil))
+        }
+      }
+    }
   }
 
-  func setAutomaticOHRMeasurementEnabled(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
+  func setAutomaticOHRMeasurementEnabled(
+    _ call: FlutterMethodCall, _ result: @escaping FlutterResult
+  ) {
     let args = call.arguments as! [Any]
     let identifier = args[0] as! String
     let enabled = args[1] as! Bool
-    _ = api.setAutomaticOHRMeasurementEnabled(identifier, enabled: enabled).subscribe(
-      onCompleted: {
-        result(nil)
-      },
-      onError: { error in
-        result(
-          FlutterError(
-            code: "Error setting automatic OHR measurement", message: error.localizedDescription,
-            details: nil))
-      })
+
+    Task {
+      do {
+        try await api.setAutomaticOHRMeasurementEnabled(identifier, enabled: enabled)
+        onMain {
+          result(nil)
+        }
+      } catch {
+        onMain {
+          result(
+            FlutterError(
+              code: "Error setting automatic OHR measurement", message: error.localizedDescription,
+              details: nil))
+        }
+      }
+    }
   }
 
   func isSdkModeEnabled(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
     let identifier = call.arguments as! String
-    _ = api.isSDKModeEnabled(identifier).subscribe(
-      onSuccess: {
-        result($0)
-      },
-      onFailure: { error in
-        result(
-          FlutterError(
-            code: "Error checking SDK mode status", message: error.localizedDescription,
-            details: nil))
-      })
+
+    Task {
+      do {
+        let isEnabled = try await api.isSDKModeEnabled(identifier)
+        onMain {
+          result(isEnabled)
+        }
+      } catch {
+        onMain {
+          result(
+            FlutterError(
+              code: "Error checking SDK mode status", message: error.localizedDescription,
+              details: nil))
+        }
+      }
+    }
   }
 
   private func success(_ event: String, data: Any? = nil) {
@@ -579,7 +677,9 @@ public class SwiftPolarPlugin:
       ])
   }
 
-  public func bleSdkFeaturesReadiness(_ identifier: String, ready: [PolarBleSdkFeature], unavailable: [PolarBleSdkFeature]) {
+  public func bleSdkFeaturesReadiness(
+    _ identifier: String, ready: [PolarBleSdkFeature], unavailable: [PolarBleSdkFeature]
+  ) {
     success(
       "sdkFeaturesReadiness",
       data: [
@@ -626,23 +726,27 @@ public class SwiftPolarPlugin:
     }
 
     // Use the api to get available offline recording data types
-    _ = api.getAvailableOfflineRecordingDataTypes(identifier).subscribe(
-      onSuccess: { dataTypes in
+    Task {
+      do {
+        let dataTypes = try await api.getAvailableOfflineRecordingDataTypes(identifier)
         // Map data types to their respective indices
         let dataTypesIds = dataTypes.compactMap { PolarDeviceDataType.allCases.firstIndex(of: $0) }
         // Safely convert indices to description strings and return
         let dataTypesDescriptions = dataTypesIds.map { "\($0)" }
-        result(dataTypesDescriptions)
-      },
-      onFailure: { error in
-        result(
-          FlutterError(
-            code: "ERROR_GETTING_DATA_TYPES",
-            message: error.localizedDescription,
-            details: nil
-          ))
+        onMain {
+          result(dataTypesDescriptions)
+        }
+      } catch {
+        onMain {
+          result(
+            FlutterError(
+              code: "ERROR_GETTING_DATA_TYPES",
+              message: error.localizedDescription,
+              details: nil
+            ))
+        }
       }
-    )
+    }
   }
 
   func requestOfflineRecordingSettings(_ call: FlutterMethodCall, _ result: @escaping FlutterResult)
@@ -667,25 +771,31 @@ public class SwiftPolarPlugin:
     }
     let feature = PolarDeviceDataType.allCases[index]
 
-    _ = api.requestOfflineRecordingSettings(identifier, feature: feature)
-      .subscribe(
-        onSuccess: { settings in
-          if let encodedData = jsonEncode(PolarSensorSettingCodable(settings)) {
+    Task {
+      do {
+        let settings = try await api.requestOfflineRecordingSettings(identifier, feature: feature)
+        if let encodedData = jsonEncode(PolarSensorSettingCodable(settings)) {
+          onMain {
             result(encodedData)
-          } else {
+          }
+        } else {
+          onMain {
             result(
               FlutterError(
                 code: "ENCODING_ERROR", message: "Failed to encode offline recording settings",
                 details: nil))
           }
-        },
-        onFailure: { error in
+        }
+      } catch {
+        onMain {
           result(
             FlutterError(
               code: "REQUEST_ERROR",
               message: "Error requesting offline recording settings: \(error.localizedDescription)",
               details: nil))
-        })
+        }
+      }
+    }
   }
 
   func startOfflineRecording(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -701,60 +811,70 @@ public class SwiftPolarPlugin:
         from: settingsData!.data(using: .utf8)!
       ).data : nil
 
-    _ = api.startOfflineRecording(identifier, feature: feature, settings: settings, secret: nil)
-      .subscribe(
-        onCompleted: {
+    Task {
+      do {
+        try await api.startOfflineRecording(
+          identifier, feature: feature, settings: settings, secret: nil)
+        onMain {
           result(nil)
-        },
-        onError: { error in
+        }
+      } catch {
+        onMain {
           result(
             FlutterError(
               code: "Error starting offline recording", message: error.localizedDescription,
               details: nil))
-        })
+        }
+      }
+    }
   }
 
   func stopOfflineRecording(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
-
     let arguments = call.arguments as! [Any]
     let identifier = arguments[0] as! String
     let feature = PolarDeviceDataType.allCases[arguments[1] as! Int]
 
-    api.stopOfflineRecording(identifier, feature: feature).subscribe(
-      onCompleted: {
-
-        result(nil)
-
-      },
-      onError: { error in
-
-        result(
-          FlutterError(
-            code: "Error stopping offline recording",
-            message: error.localizedDescription.description, details: nil))
-      })
+    Task {
+      do {
+        try await api.stopOfflineRecording(identifier, feature: feature)
+        onMain {
+          result(nil)
+        }
+      } catch {
+        onMain {
+          result(
+            FlutterError(
+              code: "Error stopping offline recording",
+              message: error.localizedDescription.description, details: nil))
+        }
+      }
+    }
   }
 
   func getOfflineRecordingStatus(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
     let arguments = call.arguments as! [Any]
     let identifier = arguments[0] as! String
 
-    _ = api.getOfflineRecordingStatus(identifier)
-      .subscribe(
-        onSuccess: { statusDict in
-          // Filter and map keys where the value is true
-          let keysWithTrueValues = statusDict.compactMap { key, value -> Int? in
-            value ? PolarDeviceDataType.allCases.firstIndex(of: key) : nil
-          }
+    Task {
+      do {
+        let statusDict = try await api.getOfflineRecordingStatus(identifier)
+        // Filter and map keys where the value is true
+        let keysWithTrueValues = statusDict.compactMap { key, value -> Int? in
+          value ? PolarDeviceDataType.allCases.firstIndex(of: key) : nil
+        }
+        onMain {
           result(keysWithTrueValues)  // Return only the filtered list of keys
-        },
-        onFailure: { error in
+        }
+      } catch {
+        onMain {
           result(
             FlutterError(
               code: "Error getting offline recording status", message: error.localizedDescription,
               details: nil)
           )
-        })
+        }
+      }
+    }
   }
 
   func setOfflineRecordingTrigger(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -787,17 +907,21 @@ public class SwiftPolarPlugin:
     let trigger = PolarOfflineRecordingTrigger(
       triggerMode: mode, triggerFeatures: triggerFeatures)
 
-    _ = api.setOfflineRecordingTrigger(identifier, trigger: trigger, secret: nil)
-      .subscribe(
-        onCompleted: {
+    Task {
+      do {
+        try await api.setOfflineRecordingTrigger(identifier, trigger: trigger, secret: nil)
+        onMain {
           result(nil)
-        },
-        onError: { error in
+        }
+      } catch {
+        onMain {
           result(
             FlutterError(
               code: "Error setting offline recording trigger",
               message: error.localizedDescription, details: nil))
-        })
+        }
+      }
+    }
   }
 
   func listOfflineRecordings(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -809,37 +933,46 @@ public class SwiftPolarPlugin:
       return
     }
 
-    api.listOfflineRecordings(identifier).debug("listOfflineRecordings")
-      .toArray()
-      .subscribe(
-        onSuccess: { entries in
-          var jsonStringList: [String] = []
+    Task {
+      do {
+        var entries: [PolarOfflineRecordingEntry] = []
+        for try await entry in api.listOfflineRecordings(identifier) {
+          entries.append(entry)
+        }
 
-          do {
-            encoder.dateEncodingStrategy = .iso8601
-            for entry in entries {
-              // Use PolarOfflineRecordingEntryCodable for encoding
-              let entryCodable = PolarOfflineRecordingEntryCodable(entry)
-              let data = try encoder.encode(entryCodable)
-              if let jsonString = String(data: data, encoding: .utf8) {
-                jsonStringList.append(jsonString)
-              }
+        var jsonStringList: [String] = []
+
+        do {
+          let encoder = JSONEncoder()
+          encoder.dateEncodingStrategy = .iso8601
+          for entry in entries {
+            // Use PolarOfflineRecordingEntryCodable for encoding
+            let entryCodable = PolarOfflineRecordingEntryCodable(entry)
+            let data = try encoder.encode(entryCodable)
+            if let jsonString = String(data: data, encoding: .utf8) {
+              jsonStringList.append(jsonString)
             }
+          }
+          onMain {
             result(jsonStringList)  // Return the array of JSON strings
-          } catch {
+          }
+        } catch {
+          onMain {
             result(
               FlutterError(
                 code: "ENCODE_ERROR", message: "Failed to encode entries to JSON", details: nil))
           }
-        },
-        onFailure: { error in
+        }
+      } catch {
+        onMain {
           result(
             FlutterError(
               code: "ERROR",
               message: "Offline recording listing error: \(error.localizedDescription)",
               details: nil))
         }
-      )
+      }
+    }
   }
 
   func getOfflineRecord(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -857,36 +990,44 @@ public class SwiftPolarPlugin:
       let entry = try JSONDecoder().decode(PolarOfflineRecordingEntryCodable.self, from: entryData)
         .data
 
-      _ = api.getOfflineRecord(identifier, entry: entry, secret: nil)
-        .subscribe(
-          onSuccess: { recordingData in
-            do {
-              // Use the PolarOfflineRecordingDataCodable to encode the data to JSON
-              let dataCodable = PolarOfflineRecordingDataCodable(recordingData)
-              encoder.dateEncodingStrategy = .millisecondsSince1970
-              let data = try encoder.encode(dataCodable)
-              if let jsonString = String(data: data, encoding: .utf8) {
+      Task {
+        do {
+          let recordingData = try await api.getOfflineRecord(identifier, entry: entry, secret: nil)
+          do {
+            // Use the PolarOfflineRecordingDataCodable to encode the data to JSON
+            let dataCodable = PolarOfflineRecordingDataCodable(recordingData)
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .millisecondsSince1970
+            let data = try encoder.encode(dataCodable)
+            if let jsonString = String(data: data, encoding: .utf8) {
+              onMain {
                 result(jsonString)
-              } else {
+              }
+            } else {
+              onMain {
                 result(
                   FlutterError(
                     code: "ENCODE_ERROR", message: "Failed to encode recording data to JSON string",
                     details: nil))
               }
-            } catch {
+            }
+          } catch {
+            onMain {
               result(
                 FlutterError(
                   code: "ENCODE_ERROR", message: "Failed to encode recording data to JSON",
                   details: nil))
             }
-          },
-          onFailure: { error in
+          }
+        } catch {
+          onMain {
             result(
               FlutterError(
                 code: "FETCH_ERROR",
                 message: "Failed to fetch recording: \(error.localizedDescription)", details: nil))
           }
-        )
+        }
+      }
     } catch {
       result(
         FlutterError(code: "DECODE_ERROR", message: "Failed to decode entry JSON", details: nil))
@@ -904,19 +1045,22 @@ public class SwiftPolarPlugin:
       return
     }
 
-    do {
-      let entry = try! JSONDecoder().decode(PolarOfflineRecordingEntryCodable.self, from: entryData)
-        .data
+    let entry = try! JSONDecoder().decode(PolarOfflineRecordingEntryCodable.self, from: entryData)
+      .data
 
-      _ = api.removeOfflineRecord(identifier, entry: entry).subscribe(
-        onCompleted: {
+    Task {
+      do {
+        try await api.removeOfflineRecord(identifier, entry: entry)
+        onMain {
           result(nil)
-        },
-        onError: { error in
+        }
+      } catch {
+        onMain {
           result(
             FlutterError(
               code: "Error removing exercise", message: error.localizedDescription, details: nil))
-        })
+        }
+      }
     }
   }
 
@@ -944,17 +1088,23 @@ public class SwiftPolarPlugin:
 
   func getDiskSpace(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
     let identifier = call.arguments as! String
-    _ = api.getDiskSpace(identifier).subscribe(
-      onSuccess: { diskSpaceData in
+
+    Task {
+      do {
+        let diskSpaceData = try await api.getDiskSpace(identifier)
         let freeSpace = diskSpaceData.freeSpace  // Corrected from 'availableSpace'
         let totalSpace = diskSpaceData.totalSpace
-        result([freeSpace, totalSpace])  // Return as a list
-      },
-      onFailure: { error in
-        result(
-          FlutterError(
-            code: "Error getting disk space", message: error.localizedDescription, details: nil))
-      })
+        onMain {
+          result([freeSpace, totalSpace])  // Return as a list
+        }
+      } catch {
+        onMain {
+          result(
+            FlutterError(
+              code: "Error getting disk space", message: error.localizedDescription, details: nil))
+        }
+      }
+    }
   }
 
   func getLocalTime(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -966,22 +1116,27 @@ public class SwiftPolarPlugin:
       return
     }
 
-    _ = api.getLocalTime(identifier).subscribe(
-      onSuccess: { time in
+    Task {
+      do {
+        let time = try await api.getLocalTime(identifier)
         let dateFormatter = ISO8601DateFormatter()
         let timeString = dateFormatter.string(from: time)
 
-        result(timeString)
-      },
-      onFailure: { error in
-        result(
-          FlutterError(
-            code: "GET_LOCAL_TIME_ERROR",
-            message: error.localizedDescription,
-            details: nil
+        onMain {
+          result(timeString)
+        }
+      } catch {
+        onMain {
+          result(
+            FlutterError(
+              code: "GET_LOCAL_TIME_ERROR",
+              message: error.localizedDescription,
+              details: nil
+            )
           )
-        )
-      })
+        }
+      }
+    }
   }
 
   func setLocalTime(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -1001,20 +1156,24 @@ public class SwiftPolarPlugin:
 
     let timeZone = TimeZone.current
 
-    _ = api.setLocalTime(identifier, time: time, zone: timeZone).subscribe(
-      onCompleted: {
-        result(nil)
-      },
-      onError: { error in
-        result(
-          FlutterError(
-            code: "SET_LOCAL_TIME_ERROR",
-            message: error.localizedDescription,
-            details: nil
+    Task {
+      do {
+        try await api.setLocalTime(identifier, time: time, zone: timeZone)
+        onMain {
+          result(nil)
+        }
+      } catch {
+        onMain {
+          result(
+            FlutterError(
+              code: "SET_LOCAL_TIME_ERROR",
+              message: error.localizedDescription,
+              details: nil
+            )
           )
-        )
+        }
       }
-    )
+    }
   }
 
   func doFirstTimeUse(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -1099,19 +1258,24 @@ public class SwiftPolarPlugin:
       sleepGoalMinutes: sleepGoalMinutes
     )
 
-    _ = api.doFirstTimeUse(identifier, ftuConfig: config).subscribe(
-      onCompleted: {
-        result(nil)
-      },
-      onError: { error in
-        result(
-          FlutterError(
-            code: "FTU_ERROR",
-            message: error.localizedDescription,
-            details: nil
-          ))
+    Task {
+      do {
+        // 8.x API: doFirstTimeUse is a plain async throws call (no stream to iterate)
+        try await api.doFirstTimeUse(identifier, ftuConfig: config)
+        onMain {
+          result(nil)
+        }
+      } catch {
+        onMain {
+          result(
+            FlutterError(
+              code: "FTU_ERROR",
+              message: error.localizedDescription,
+              details: nil
+            ))
+        }
       }
-    )
+    }
   }
 
   func isFtuDone(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -1125,20 +1289,24 @@ public class SwiftPolarPlugin:
       return
     }
 
-    _ = api.isFtuDone(identifier).subscribe(
-      onSuccess: { isFtuDone in
-        result(isFtuDone)
-      },
-      onFailure: { error in
-        result(
-          FlutterError(
-            code: "FTU_CHECK_ERROR",
-            message: error.localizedDescription,
-            details: nil
+    Task {
+      do {
+        let isFtuDone = try await api.isFtuDone(identifier)
+        onMain {
+          result(isFtuDone)
+        }
+      } catch {
+        onMain {
+          result(
+            FlutterError(
+              code: "FTU_CHECK_ERROR",
+              message: error.localizedDescription,
+              details: nil
+            )
           )
-        )
+        }
       }
-    )
+    }
   }
 
   func deleteStoredDeviceData(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -1179,19 +1347,22 @@ public class SwiftPolarPlugin:
       return
     }
 
-    _ = api.deleteStoredDeviceData(identifier, dataType: dataType, until: untilDate)
-      .subscribe(
-        onCompleted: {
+    Task {
+      do {
+        try await api.deleteStoredDeviceData(identifier, dataType: dataType, until: untilDate)
+        onMain {
           result(nil)
-        },
-        onError: { error in
+        }
+      } catch {
+        onMain {
           result(
             FlutterError(
               code: "ERROR_DELETING_DATA",
               message: error.localizedDescription,
               details: nil))
         }
-      )
+      }
+    }
   }
 
   func deleteDeviceDateFolders(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -1224,19 +1395,22 @@ public class SwiftPolarPlugin:
       return
     }
 
-    _ = api.deleteDeviceDateFolders(identifier, fromDate: fromDate, toDate: toDate)
-      .subscribe(
-        onCompleted: {
+    Task {
+      do {
+        try await api.deleteDeviceDateFolders(identifier, fromDate: fromDate, toDate: toDate)
+        onMain {
           result(nil)
-        },
-        onError: { error in
+        }
+      } catch {
+        onMain {
           result(
             FlutterError(
               code: "ERROR_DELETING_FOLDERS",
               message: error.localizedDescription,
               details: nil))
         }
-      )
+      }
+    }
   }
 
   func getSteps(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -1268,66 +1442,86 @@ public class SwiftPolarPlugin:
       return
     }
 
-    _ = api.getSteps(identifier: identifier, fromDate: fromDate, toDate: toDate)
-      .subscribe(
-        onSuccess: { stepsData in
-          do {
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            let jsonData = try encoder.encode(stepsData)
-            if let jsonString = String(data: jsonData, encoding: .utf8) {
+    Task {
+      do {
+        let stepsData = try await api.getSteps(
+          identifier: identifier, fromDate: fromDate, toDate: toDate)
+        do {
+          let encoder = JSONEncoder()
+          encoder.dateEncodingStrategy = .iso8601
+          let jsonData = try encoder.encode(stepsData)
+          if let jsonString = String(data: jsonData, encoding: .utf8) {
+            onMain {
               result(jsonString)
-            } else {
+            }
+          } else {
+            onMain {
               result(
                 FlutterError(
                   code: "ENCODING_ERROR",
                   message: "Failed to convert JSON data to string",
                   details: nil))
             }
-          } catch {
+          }
+        } catch {
+          onMain {
             result(
               FlutterError(
                 code: "ENCODING_ERROR",
                 message: "Failed to encode steps data: \(error.localizedDescription)",
                 details: nil))
           }
-        },
-        onFailure: { error in
+        }
+      } catch {
+        onMain {
           result(
             FlutterError(
               code: "ERROR_GETTING_STEPS",
               message: error.localizedDescription,
               details: nil))
         }
-      )
+      }
+    }
   }
 
   func getSleepRecordingState(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
     let identifier = call.arguments as! String
-    _ = api.getSleepRecordingState(identifier: identifier).subscribe(
-      onSuccess: {
-        result($0)
-      },
-      onFailure: { error in
-        result(
-          FlutterError(
-            code: "Error getting sleep recording state",
-            message: error.localizedDescription, details: nil))
-      })
+
+    Task {
+      do {
+        let state = try await api.getSleepRecordingState(identifier: identifier)
+        onMain {
+          result(state)
+        }
+      } catch {
+        onMain {
+          result(
+            FlutterError(
+              code: "Error getting sleep recording state",
+              message: error.localizedDescription, details: nil))
+        }
+      }
+    }
   }
 
   func stopSleepRecording(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
     let identifier = call.arguments as! String
-    _ = api.stopSleepRecording(identifier: identifier).subscribe(
-      onCompleted: {
-        result(nil)
-      },
-      onError: { error in
-        result(
-          FlutterError(
-            code: "Error stopping sleep recording",
-            message: error.localizedDescription, details: nil))
-      })
+
+    Task {
+      do {
+        try await api.stopSleepRecording(identifier: identifier)
+        onMain {
+          result(nil)
+        }
+      } catch {
+        onMain {
+          result(
+            FlutterError(
+              code: "Error stopping sleep recording",
+              message: error.localizedDescription, details: nil))
+        }
+      }
+    }
   }
 
   func getSleep(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -1359,85 +1553,95 @@ public class SwiftPolarPlugin:
       return
     }
 
-    _ = api.getSleep(identifier: identifier, fromDate: fromDate, toDate: toDate)
-      .subscribe(
-        onSuccess: { sleepData in
-          let isoFormatter = ISO8601DateFormatter()
-          let dayFormatter = DateFormatter()
-          dayFormatter.dateFormat = "yyyy-MM-dd"
+    Task {
+      do {
+        let sleepData = try await api.getSleep(
+          identifier: identifier, fromDate: fromDate, toDate: toDate)
 
-          // The device returns one entry per day in the requested range, most
-          // with no actual sleep (nil start/end). Keep only entries with a real
-          // sleep period so the payload carries real sleep only.
-          let mapped: [[String: Any]] = sleepData.compactMap { analysis in
-            guard let start = analysis.sleepStartTime,
-              let end = analysis.sleepEndTime
-            else {
-              return nil
-            }
-            // Prefer the device-provided result date; fall back to the wake date.
-            let dateString: String
-            if let comps = analysis.sleepResultDate,
-              let resultDate = Calendar.current.date(from: comps) {
-              dateString = dayFormatter.string(from: resultDate)
-            } else {
-              dateString = dayFormatter.string(from: end)
-            }
-            let phases: [[String: Any]] = (analysis.sleepWakePhases ?? []).map { phase in
-              [
-                "offsetSeconds": Int(phase.secondsFromSleepStart),
-                "state": phase.state.rawValue,
-              ]
-            }
-            let cycles: [[String: Any]] = (analysis.sleepCycles ?? []).map { cycle in
-              [
-                "offsetSeconds": Int(cycle.secondsFromSleepStart),
-                "sleepDepthStart": cycle.sleepDepthStart,
-              ]
-            }
-            var entry: [String: Any] = [
-              "date": dateString,
-              "sleepStartTime": isoFormatter.string(from: start),
-              "sleepEndTime": isoFormatter.string(from: end),
-              "sleepWakePhases": phases,
-              "sleepCycles": cycles,
-            ]
-            if let goal = analysis.sleepGoalMinutes {
-              entry["sleepGoalMinutes"] = Int(goal)
-            }
-            if let rating = analysis.userSleepRating {
-              entry["userSleepRating"] = rating.rawValue
-            }
-            return entry
+        let isoFormatter = ISO8601DateFormatter()
+        let dayFormatter = DateFormatter()
+        dayFormatter.dateFormat = "yyyy-MM-dd"
+
+        // The device returns one entry per day in the requested range, most
+        // with no actual sleep (nil start/end). Keep only entries with a real
+        // sleep period so the payload carries real sleep only.
+        let mapped: [[String: Any]] = sleepData.compactMap { analysis in
+          guard let start = analysis.sleepStartTime,
+            let end = analysis.sleepEndTime
+          else {
+            return nil
           }
+          // Prefer the device-provided result date; fall back to the wake date.
+          let dateString: String
+          if let comps = analysis.sleepResultDate,
+            let resultDate = Calendar.current.date(from: comps)
+          {
+            dateString = dayFormatter.string(from: resultDate)
+          } else {
+            dateString = dayFormatter.string(from: end)
+          }
+          let phases: [[String: Any]] = (analysis.sleepWakePhases ?? []).map { phase in
+            [
+              "offsetSeconds": Int(phase.secondsFromSleepStart),
+              "state": phase.state.rawValue,
+            ]
+          }
+          let cycles: [[String: Any]] = (analysis.sleepCycles ?? []).map { cycle in
+            [
+              "offsetSeconds": Int(cycle.secondsFromSleepStart),
+              "sleepDepthStart": cycle.sleepDepthStart,
+            ]
+          }
+          var entry: [String: Any] = [
+            "date": dateString,
+            "sleepStartTime": isoFormatter.string(from: start),
+            "sleepEndTime": isoFormatter.string(from: end),
+            "sleepWakePhases": phases,
+            "sleepCycles": cycles,
+          ]
+          if let goal = analysis.sleepGoalMinutes {
+            entry["sleepGoalMinutes"] = Int(goal)
+          }
+          if let rating = analysis.userSleepRating {
+            entry["userSleepRating"] = rating.rawValue
+          }
+          return entry
+        }
 
-          do {
-            let jsonData = try JSONSerialization.data(withJSONObject: mapped, options: [])
-            if let jsonString = String(data: jsonData, encoding: .utf8) {
+        do {
+          let jsonData = try JSONSerialization.data(withJSONObject: mapped, options: [])
+          if let jsonString = String(data: jsonData, encoding: .utf8) {
+            onMain {
               result(jsonString)
-            } else {
+            }
+          } else {
+            onMain {
               result(
                 FlutterError(
                   code: "ENCODING_ERROR",
                   message: "Failed to convert JSON data to string",
                   details: nil))
             }
-          } catch {
+          }
+        } catch {
+          onMain {
             result(
               FlutterError(
                 code: "ENCODING_ERROR",
                 message: "Failed to encode sleep data: \(error.localizedDescription)",
                 details: nil))
           }
-        },
-        onFailure: { error in
+        }
+      } catch {
+        onMain {
           result(
             FlutterError(
               code: "ERROR_GETTING_SLEEP",
               message: error.localizedDescription,
               details: nil))
         }
-      )
+      }
+    }
   }
 
   func getDistance(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -1469,39 +1673,47 @@ public class SwiftPolarPlugin:
       return
     }
 
-    _ = api.getDistance(identifier: identifier, fromDate: fromDate, toDate: toDate)
-      .subscribe(
-        onSuccess: { distanceData in
-          do {
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            let codables = distanceData.map(PolarDistanceDataCodable.init)
-            let jsonData = try encoder.encode(codables)
-            if let jsonString = String(data: jsonData, encoding: .utf8) {
+    Task {
+      do {
+        let distanceData = try await api.getDistance(
+          identifier: identifier, fromDate: fromDate, toDate: toDate)
+        do {
+          let encoder = JSONEncoder()
+          encoder.dateEncodingStrategy = .iso8601
+          let codables = distanceData.map(PolarDistanceDataCodable.init)
+          let jsonData = try encoder.encode(codables)
+          if let jsonString = String(data: jsonData, encoding: .utf8) {
+            onMain {
               result(jsonString)
-            } else {
+            }
+          } else {
+            onMain {
               result(
                 FlutterError(
                   code: "ENCODING_ERROR",
                   message: "Failed to convert JSON data to string",
                   details: nil))
             }
-          } catch {
+          }
+        } catch {
+          onMain {
             result(
               FlutterError(
                 code: "ENCODING_ERROR",
                 message: "Failed to encode distance data: \(error.localizedDescription)",
                 details: nil))
           }
-        },
-        onFailure: { error in
+        }
+      } catch {
+        onMain {
           result(
             FlutterError(
               code: "ERROR_GETTING_DISTANCE",
               message: error.localizedDescription,
               details: nil))
         }
-      )
+      }
+    }
   }
 
   func getActiveTime(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -1533,39 +1745,47 @@ public class SwiftPolarPlugin:
       return
     }
 
-    _ = api.getActiveTime(identifier: identifier, fromDate: fromDate, toDate: toDate)
-      .subscribe(
-        onSuccess: { activeTimeData in
-          do {
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            let codables = activeTimeData.map(PolarActiveTimeDataCodable.init)
-            let jsonData = try encoder.encode(codables)
-            if let jsonString = String(data: jsonData, encoding: .utf8) {
+    Task {
+      do {
+        let activeTimeData = try await api.getActiveTime(
+          identifier: identifier, fromDate: fromDate, toDate: toDate)
+        do {
+          let encoder = JSONEncoder()
+          encoder.dateEncodingStrategy = .iso8601
+          let codables = activeTimeData.map(PolarActiveTimeDataCodable.init)
+          let jsonData = try encoder.encode(codables)
+          if let jsonString = String(data: jsonData, encoding: .utf8) {
+            onMain {
               result(jsonString)
-            } else {
+            }
+          } else {
+            onMain {
               result(
                 FlutterError(
                   code: "ENCODING_ERROR",
                   message: "Failed to convert JSON data to string",
                   details: nil))
             }
-          } catch {
+          }
+        } catch {
+          onMain {
             result(
               FlutterError(
                 code: "ENCODING_ERROR",
                 message: "Failed to encode active time data: \(error.localizedDescription)",
                 details: nil))
           }
-        },
-        onFailure: { error in
+        }
+      } catch {
+        onMain {
           result(
             FlutterError(
               code: "ERROR_GETTING_ACTIVE_TIME",
               message: error.localizedDescription,
               details: nil))
         }
-      )
+      }
+    }
   }
 
   func getActivitySampleData(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -1597,88 +1817,96 @@ public class SwiftPolarPlugin:
       return
     }
 
-    _ = api.getActivitySampleData(identifier: identifier, fromDate: fromDate, toDate: toDate)
-      .subscribe(
-        onSuccess: { activityDayDataList in
-          do {
-            // Convert the data directly from the native structures
-            let response = activityDayDataList.map { dayData -> [String: Any] in
-              let samplesDataList = dayData.polarActivityDataList.compactMap {
-                activityData -> [String: Any]? in
-                // Access the samples directly from the activityData
-                guard let samples = activityData.samples else { return nil }
+    Task {
+      do {
+        let activityDayDataList = try await api.getActivitySampleData(
+          identifier: identifier, fromDate: fromDate, toDate: toDate)
+        do {
+          // Convert the data directly from the native structures
+          let response = activityDayDataList.map { dayData -> [String: Any] in
+            let samplesDataList = dayData.polarActivityDataList.compactMap {
+              activityData -> [String: Any]? in
+              // Access the samples directly from the activityData
+              guard let samples = activityData.samples else { return nil }
 
-                // Convert startTime to ISO8601 string
-                let formatter = ISO8601DateFormatter()
-                let startTimeString = formatter.string(from: samples.startTime)
+              // Convert startTime to ISO8601 string
+              let formatter = ISO8601DateFormatter()
+              let startTimeString = formatter.string(from: samples.startTime)
 
-                // Convert activityInfoList
-                let activityInfoList = samples.activityInfoList.map { activityInfo in
-                  [
-                    "timeStamp": formatter.string(from: activityInfo.timeStamp),
-                    "activityClass": activityInfo.activityClass.rawValue,
-                    "factor": activityInfo.factor,
-                  ]
-                }
-
-                return [
-                  "startTime": startTimeString,
-                  "metRecordingInterval": samples.metRecordingInterval,
-                  "metSamples": samples.metSamples ?? [],
-                  "stepRecordingInterval": samples.stepRecordingInterval,
-                  "stepSamples": samples.stepSamples ?? [],
-                  "activityInfoList": activityInfoList,
+              // Convert activityInfoList
+              let activityInfoList = samples.activityInfoList.map { activityInfo in
+                [
+                  "timeStamp": formatter.string(from: activityInfo.timeStamp),
+                  "activityClass": activityInfo.activityClass.rawValue,
+                  "factor": activityInfo.factor,
                 ]
               }
 
-              // Extract date from first sample's startTime (sensor-local calendar date)
-              let dateString: String
-              if let firstSample = samplesDataList.first,
-                let startTime = firstSample["startTime"] as? String,
-                !startTime.isEmpty
-              {
-                // Extract date part from ISO8601 string (YYYY-MM-DD)
-                if let dateRange = startTime.range(of: "T") {
-                  dateString = String(startTime[..<dateRange.lowerBound])
-                } else {
-                  dateString = startTime
-                }
-              } else {
-                dateString = ""
-              }
-
               return [
-                "date": dateString,
-                "samplesDataList": samplesDataList,
+                "startTime": startTimeString,
+                "metRecordingInterval": samples.metRecordingInterval,
+                "metSamples": samples.metSamples ?? [],
+                "stepRecordingInterval": samples.stepRecordingInterval,
+                "stepSamples": samples.stepSamples ?? [],
+                "activityInfoList": activityInfoList,
               ]
             }
 
-            let jsonData = try JSONSerialization.data(withJSONObject: response, options: [])
-            if let jsonString = String(data: jsonData, encoding: .utf8) {
-              result(jsonString)
+            // Extract date from first sample's startTime (sensor-local calendar date)
+            let dateString: String
+            if let firstSample = samplesDataList.first,
+              let startTime = firstSample["startTime"] as? String,
+              !startTime.isEmpty
+            {
+              // Extract date part from ISO8601 string (YYYY-MM-DD)
+              if let dateRange = startTime.range(of: "T") {
+                dateString = String(startTime[..<dateRange.lowerBound])
+              } else {
+                dateString = startTime
+              }
             } else {
+              dateString = ""
+            }
+
+            return [
+              "date": dateString,
+              "samplesDataList": samplesDataList,
+            ]
+          }
+
+          let jsonData = try JSONSerialization.data(withJSONObject: response, options: [])
+          if let jsonString = String(data: jsonData, encoding: .utf8) {
+            onMain {
+              result(jsonString)
+            }
+          } else {
+            onMain {
               result(
                 FlutterError(
                   code: "ENCODING_ERROR",
                   message: "Failed to convert JSON data to string",
                   details: nil))
             }
-          } catch {
+          }
+        } catch {
+          onMain {
             result(
               FlutterError(
                 code: "ENCODING_ERROR",
                 message: "Failed to encode activity sample data: \(error.localizedDescription)",
                 details: nil))
           }
-        },
-        onFailure: { error in
+        }
+      } catch {
+        onMain {
           result(
             FlutterError(
               code: "ERROR_GETTING_ACTIVITY_SAMPLE_DATA",
               message: error.localizedDescription,
               details: nil))
         }
-      )
+      }
+    }
   }
 
   func sendInitializationAndStartSyncNotifications(
@@ -1693,19 +1921,22 @@ public class SwiftPolarPlugin:
       return
     }
 
-    _ = api.sendInitializationAndStartSyncNotifications(identifier: identifier)
-      .subscribe(
-        onCompleted: {
+    Task {
+      do {
+        try await api.sendInitializationAndStartSyncNotifications(identifier: identifier)
+        onMain {
           result(nil)
-        },
-        onError: { error in
+        }
+      } catch {
+        onMain {
           result(
             FlutterError(
               code: error.localizedDescription,
               message: error.localizedDescription,
               details: nil))
         }
-      )
+      }
+    }
   }
 
   func sendTerminateAndStopSyncNotifications(
@@ -1720,19 +1951,22 @@ public class SwiftPolarPlugin:
       return
     }
 
-    _ = api.sendTerminateAndStopSyncNotifications(identifier: identifier)
-      .subscribe(
-        onCompleted: {
+    Task {
+      do {
+        try await api.sendTerminateAndStopSyncNotifications(identifier: identifier)
+        onMain {
           result(nil)
-        },
-        onError: { error in
+        }
+      } catch {
+        onMain {
           result(
             FlutterError(
               code: error.localizedDescription,
               message: error.localizedDescription,
               details: nil))
         }
-      )
+      }
+    }
   }
 
   func checkFirmwareUpdate(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -1745,9 +1979,9 @@ public class SwiftPolarPlugin:
       return
     }
 
-    _ = api.checkFirmwareUpdate(identifier)
-      .subscribe(
-        onNext: { status in
+    Task {
+      do {
+        for try await status in api.checkFirmwareUpdate(identifier) {
           var jsonStatus: [String: Any] = [:]
           switch status {
           case .checkFwUpdateAvailable(let version):
@@ -1759,11 +1993,12 @@ public class SwiftPolarPlugin:
           }
 
           self.success("firmwareUpdateCheckStatusReceived", data: [identifier, jsonStatus])
-        },
-        onError: { error in
-          let jsonStatus: [String: Any] = ["type": "failed", "details": error.localizedDescription]
-          self.success("firmwareUpdateCheckStatusReceived", data: [identifier, jsonStatus])
-        })
+        }
+      } catch {
+        let jsonStatus: [String: Any] = ["type": "failed", "details": error.localizedDescription]
+        self.success("firmwareUpdateCheckStatusReceived", data: [identifier, jsonStatus])
+      }
+    }
 
     result(nil)
   }
@@ -1789,37 +2024,39 @@ public class SwiftPolarPlugin:
       return
     }
 
-    let observable =
+    let stream =
       firmwareUrl != nil
       ? api.updateFirmware(identifier, fromFirmwareURL: URL(string: firmwareUrl!)!)
       : api.updateFirmware(identifier)
 
-    _ = observable.subscribe(
-      onNext: { status in
-        var jsonStatus: [String: Any] = [:]
-        switch status {
-        case .fetchingFwUpdatePackage(let details):
-          jsonStatus = ["type": "fetchingPackage", "details": details]
-        case .preparingDeviceForFwUpdate(let details):
-          jsonStatus = ["type": "preparingDevice", "details": details]
-        case .writingFwUpdatePackage(let details):
-          jsonStatus = ["type": "writingPackage", "details": details]
-        case .finalizingFwUpdate(let details):
-          jsonStatus = ["type": "finalizing", "details": details]
-        case .fwUpdateCompletedSuccessfully(let details):
-          jsonStatus = ["type": "completed", "details": details]
-        case .fwUpdateNotAvailable(let details):
-          jsonStatus = ["type": "notAvailable", "details": details]
-        case .fwUpdateFailed(let details):
-          jsonStatus = ["type": "failed", "details": details]
-        }
+    Task {
+      do {
+        for try await status in stream {
+          var jsonStatus: [String: Any] = [:]
+          switch status {
+          case .fetchingFwUpdatePackage(let details):
+            jsonStatus = ["type": "fetchingPackage", "details": details]
+          case .preparingDeviceForFwUpdate(let details):
+            jsonStatus = ["type": "preparingDevice", "details": details]
+          case .writingFwUpdatePackage(let details):
+            jsonStatus = ["type": "writingPackage", "details": details]
+          case .finalizingFwUpdate(let details):
+            jsonStatus = ["type": "finalizing", "details": details]
+          case .fwUpdateCompletedSuccessfully(let details):
+            jsonStatus = ["type": "completed", "details": details]
+          case .fwUpdateNotAvailable(let details):
+            jsonStatus = ["type": "notAvailable", "details": details]
+          case .fwUpdateFailed(let details):
+            jsonStatus = ["type": "failed", "details": details]
+          }
 
-        self.success("firmwareUpdateStatusReceived", data: [identifier, jsonStatus])
-      },
-      onError: { error in
+          self.success("firmwareUpdateStatusReceived", data: [identifier, jsonStatus])
+        }
+      } catch {
         let jsonStatus: [String: Any] = ["type": "failed", "details": error.localizedDescription]
         self.success("firmwareUpdateStatusReceived", data: [identifier, jsonStatus])
-      })
+      }
+    }
 
     result(nil)
   }
@@ -1848,31 +2085,13 @@ class StreamHandler: NSObject, FlutterStreamHandler {
   }
 }
 
-protocol AnyObservable {
-  func anySubscribe(
-    onNext: ((Any) -> Void)?,
-    onError: ((Swift.Error) -> Void)?,
-    onCompleted: (() -> Void)?
-  ) -> Disposable
-}
-
-extension Observable: AnyObservable {
-  public func anySubscribe(
-    onNext: ((Any) -> Void)? = nil,
-    onError: ((Swift.Error) -> Void)? = nil,
-    onCompleted: (() -> Void)? = nil
-  ) -> Disposable {
-    subscribe(onNext: onNext, onError: onError, onCompleted: onCompleted)
-  }
-}
-
 class StreamingChannel: NSObject, FlutterStreamHandler {
   let api: PolarBleApi
   let identifier: String
   let feature: PolarDeviceDataType
   let channel: FlutterEventChannel
 
-  var subscription: Disposable?
+  var streamTask: Task<Void, Never>?
 
   init(
     _ messenger: FlutterBinaryMessenger, _ name: String, _ api: PolarBleApi, _ identifier: String,
@@ -1898,62 +2117,75 @@ class StreamingChannel: NSObject, FlutterStreamHandler {
         .data(using: .utf8)!
     ).data
 
-    let stream: AnyObservable
     switch feature {
     case .ecg:
-      stream = api.startEcgStreaming(identifier, settings: settings!)
+      streamTask = consume(api.startEcgStreaming(identifier, settings: settings!), events)
     case .acc:
-      stream = api.startAccStreaming(identifier, settings: settings!)
+      streamTask = consume(api.startAccStreaming(identifier, settings: settings!), events)
     case .ppg:
-      stream = api.startPpgStreaming(identifier, settings: settings!)
+      streamTask = consume(api.startPpgStreaming(identifier, settings: settings!), events)
     case .ppi:
-      stream = api.startPpiStreaming(identifier)
+      streamTask = consume(api.startPpiStreaming(identifier), events)
     case .gyro:
-      stream = api.startGyroStreaming(identifier, settings: settings!)
+      streamTask = consume(api.startGyroStreaming(identifier, settings: settings!), events)
     case .magnetometer:
-      stream = api.startMagnetometerStreaming(identifier, settings: settings!)
+      streamTask = consume(api.startMagnetometerStreaming(identifier, settings: settings!), events)
     case .hr:
-      stream = api.startHrStreaming(identifier)
+      streamTask = consume(api.startHrStreaming(identifier), events)
     case .temperature:
-      stream = api.startTemperatureStreaming(identifier, settings: settings!)
+      streamTask = consume(api.startTemperatureStreaming(identifier, settings: settings!), events)
     case .pressure:
-      stream = api.startPressureStreaming(identifier, settings: settings!)
+      streamTask = consume(api.startPressureStreaming(identifier, settings: settings!), events)
     case .skinTemperature:
-      stream = api.startSkinTemperatureStreaming(identifier, settings: settings!)
+      streamTask = consume(
+        api.startSkinTemperatureStreaming(identifier, settings: settings!), events)
     }
-
-    subscription = stream.anySubscribe(
-      onNext: { data in
-        guard let data = jsonEncode(PolarDataCodable(data)) else {
-          return
-        }
-        DispatchQueue.main.async {
-          events(data)
-        }
-      },
-      onError: { error in
-        DispatchQueue.main.async {
-          events(
-            FlutterError(
-              code: "Error while streaming", message: error.localizedDescription, details: nil))
-        }
-      },
-      onCompleted: {
-        DispatchQueue.main.async {
-          events(FlutterEndOfEventStream)
-        }
-      })
 
     return nil
   }
 
+  /// Iterate an SDK data stream and forward each sample batch to Flutter.
+  /// Values arrive on the cooperative thread pool, so every sink invocation
+  /// is dispatched onto the main thread.
+  private func consume<T>(
+    _ stream: AsyncThrowingStream<T, Error>, _ events: @escaping FlutterEventSink
+  ) -> Task<Void, Never> {
+    Task {
+      do {
+        for try await data in stream {
+          guard let data = jsonEncode(PolarDataCodable(data)) else {
+            continue
+          }
+          onMain {
+            events(data)
+          }
+        }
+        if !Task.isCancelled {
+          onMain {
+            events(FlutterEndOfEventStream)
+          }
+        }
+      } catch {
+        if !Task.isCancelled {
+          onMain {
+            events(
+              FlutterError(
+                code: "Error while streaming", message: error.localizedDescription, details: nil))
+          }
+        }
+      }
+    }
+  }
+
   func onCancel(withArguments arguments: Any?) -> FlutterError? {
-    subscription?.dispose()
+    streamTask?.cancel()
+    streamTask = nil
     return nil
   }
 
   func dispose() {
-    subscription?.dispose()
+    streamTask?.cancel()
+    streamTask = nil
     channel.setStreamHandler(nil)
   }
 }
