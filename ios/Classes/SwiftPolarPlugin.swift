@@ -918,7 +918,7 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "Error setting offline recording trigger",
-              message: error.localizedDescription, details: nil))
+              message: String(describing: error), details: nil))
         }
       }
     }
