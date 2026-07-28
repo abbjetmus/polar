@@ -57,6 +57,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.lang.reflect.Type
@@ -1705,11 +1706,15 @@ class PolarPlugin :
             return
         }
 
-        val statusFlow = if (firmwareUrl != null) {
+        // SDK 8.x rewrote updateFirmware from an RxJava Flowable (subscribeOn(Schedulers.io()))
+        // to a cold Flow that runs in the collector's context. Collecting on the main dispatcher
+        // makes the blocking firmware download throw NetworkOnMainThreadException, so move the
+        // upstream to IO while keeping collection (event sink calls) on main.
+        val statusFlow = (if (firmwareUrl != null) {
             wrapper.api.updateFirmware(identifier, firmwareUrl)
         } else {
             wrapper.api.updateFirmware(identifier)
-        }
+        }).flowOn(Dispatchers.IO)
 
         scope.launch {
             var lastStatus: FirmwareUpdateStatus? = null
