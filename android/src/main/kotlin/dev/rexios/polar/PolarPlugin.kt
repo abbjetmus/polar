@@ -59,6 +59,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.lang.reflect.Type
 import java.time.Instant
@@ -250,6 +251,12 @@ class PolarPlugin :
             "getChargerState" -> getChargerState(call, result)
             "getDiskSpace" -> getDiskSpace(call, result)
             "getLocalTime" -> getLocalTime(call, result)
+            "foregroundEntered" -> {
+                // Restarts BLE scan after screen-off power save so the SDK's
+                // automatic reconnection can proceed (see PolarBleApi docs).
+                wrapper.api.foregroundEntered()
+                result.success(null)
+            }
             "setLocalTime" -> setLocalTime(call, result)
             "doFirstTimeUse" -> doFirstTimeUse(call, result)
             "isFtuDone" -> isFtuDone(call, result)
@@ -764,11 +771,15 @@ class PolarPlugin :
         val identifier = call.arguments as String
 
         scope.launch {
-            val recordings = mutableListOf<String>()
             try {
-                wrapper.api
-                    .listOfflineRecordings(identifier)
-                    .collect { recordings.add(it.toJsonString()) }
+                // PSFTP directory walk — keep it off the main dispatcher.
+                val recordings = withContext(Dispatchers.IO) {
+                    val list = mutableListOf<String>()
+                    wrapper.api
+                        .listOfflineRecordings(identifier)
+                        .collect { list.add(it.toJsonString()) }
+                    list
+                }
                 result.success(recordings)
             } catch (e: CancellationException) {
                 throw e
@@ -785,8 +796,12 @@ class PolarPlugin :
 
         scope.launch {
             try {
-                val record = wrapper.api.getOfflineRecord(identifier, entry)
-                val json = gson.toJson(record)
+                // Multi-MB PSFTP file read + JSON serialization of the whole
+                // record — keep both off the main dispatcher.
+                val json = withContext(Dispatchers.IO) {
+                    val record = wrapper.api.getOfflineRecord(identifier, entry)
+                    gson.toJson(record)
+                }
                 result.success(json)
             } catch (e: CancellationException) {
                 throw e
@@ -815,13 +830,17 @@ class PolarPlugin :
 
     private fun getChargerState(call: MethodCall, result: Result) {
         val identifier = call.arguments as String
-        try {
-            val chargeState = wrapper.api.getChargerState(identifier)
-            runOnUiThread {
+        // The SDK call is synchronous BLE-adjacent work — run it off the
+        // platform channel thread instead of blocking it.
+        scope.launch {
+            try {
+                val chargeState = withContext(Dispatchers.IO) {
+                    wrapper.api.getChargerState(identifier)
+                }
                 result.success(chargeState.name)
-            }
-        } catch (e: Exception) {
-            runOnUiThread {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
                 result.error("GET_CHARGER_STATE_ERROR", e.message, null)
             }
         }

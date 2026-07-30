@@ -628,6 +628,7 @@ public class SwiftPolarPlugin:
   public func deviceConnecting(_ polarDeviceInfo: PolarDeviceInfo) {
     guard let data = jsonEncode(PolarDeviceInfoCodable(polarDeviceInfo))
     else {
+      NSLog("PolarPlugin: dropping deviceConnecting event - failed to encode device info")
       return
     }
     success("deviceConnecting", data: data)
@@ -636,6 +637,7 @@ public class SwiftPolarPlugin:
   public func deviceConnected(_ polarDeviceInfo: PolarDeviceInfo) {
     guard let data = jsonEncode(PolarDeviceInfoCodable(polarDeviceInfo))
     else {
+      NSLog("PolarPlugin: dropping deviceConnected event - failed to encode device info")
       return
     }
     success("deviceConnected", data: data)
@@ -644,6 +646,7 @@ public class SwiftPolarPlugin:
   public func deviceDisconnected(_ polarDeviceInfo: PolarDeviceInfo, pairingError: Bool) {
     guard let data = jsonEncode(PolarDeviceInfoCodable(polarDeviceInfo))
     else {
+      NSLog("PolarPlugin: dropping deviceDisconnected event - failed to encode device info")
       return
     }
     success("deviceDisconnected", data: [data, pairingError])
@@ -1045,8 +1048,15 @@ public class SwiftPolarPlugin:
       return
     }
 
-    let entry = try! JSONDecoder().decode(PolarOfflineRecordingEntryCodable.self, from: entryData)
-      .data
+    guard
+      let entry = try? JSONDecoder().decode(
+        PolarOfflineRecordingEntryCodable.self, from: entryData
+      ).data
+    else {
+      result(
+        FlutterError(code: "DECODE_ERROR", message: "Failed to decode entry JSON", details: nil))
+      return
+    }
 
     Task {
       do {
@@ -1066,23 +1076,29 @@ public class SwiftPolarPlugin:
 
   func getChargerState(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
     let identifier = call.arguments as! String
-    do {
-      let chargeState = try api.getChargerState(identifier: identifier)
-      // Return as string matching the Swift enum case names
-      let stateString: String
-      switch chargeState {
-      case .charging: stateString = "charging"
-      case .dischargingActive: stateString = "dischargingActive"
-      case .dischargingInactive: stateString = "dischargingInactive"
-      default: stateString = "unknown"
+    // Synchronous BLE-adjacent SDK call — run it off the platform channel
+    // thread instead of blocking it.
+    Task {
+      do {
+        let chargeState = try api.getChargerState(identifier: identifier)
+        // Return as string matching the Swift enum case names
+        let stateString: String
+        switch chargeState {
+        case .charging: stateString = "charging"
+        case .dischargingActive: stateString = "dischargingActive"
+        case .dischargingInactive: stateString = "dischargingInactive"
+        default: stateString = "unknown"
+        }
+        onMain { result(stateString) }
+      } catch {
+        onMain {
+          result(
+            FlutterError(
+              code: "GET_CHARGER_STATE_ERROR",
+              message: error.localizedDescription,
+              details: nil))
+        }
       }
-      result(stateString)
-    } catch {
-      result(
-        FlutterError(
-          code: "GET_CHARGER_STATE_ERROR",
-          message: error.localizedDescription,
-          details: nil))
     }
   }
 
@@ -2110,12 +2126,27 @@ class StreamingChannel: NSObject, FlutterStreamHandler {
   func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink)
     -> FlutterError?
   {
-    // Will be null for some features
+    // Will be null for some features (PPI/HR take no settings)
     let settings = try? decoder.decode(
       PolarSensorSettingCodable.self,
       from: (arguments as! String)
         .data(using: .utf8)!
     ).data
+
+    // Settings-bearing features must have decodable settings — fail the
+    // stream instead of force-unwrapping and crashing the app on a
+    // malformed payload.
+    switch feature {
+    case .ppi, .hr:
+      break
+    default:
+      guard settings != nil else {
+        return FlutterError(
+          code: "INVALID_SETTINGS",
+          message: "Failed to decode sensor settings for \(feature)",
+          details: nil)
+      }
+    }
 
     switch feature {
     case .ecg:

@@ -931,6 +931,16 @@ class Polar {
   /// - Returns: The local time of the Polar device as a DateTime object.
   ///   - success: Returns the local time.
   ///   - onError: Possible errors are returned as exceptions.
+  /// Android only: notify the SDK that the app entered the foreground.
+  ///
+  /// Restarts the BLE scan, which does not work while the display is off
+  /// (Android power save). Calling this on app resume lets the SDK's
+  /// automatic reconnection recover a dropped connection. No-op on iOS.
+  Future<void> foregroundEntered() async {
+    if (!Platform.isAndroid) return;
+    await _methodChannel.invokeMethod<void>('foregroundEntered');
+  }
+
   Future<DateTime?> getLocalTime(String identifier) async {
     // Call the native method to get the local time from the Polar device
     final result =
