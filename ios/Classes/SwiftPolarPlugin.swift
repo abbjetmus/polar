@@ -1940,16 +1940,21 @@ public class SwiftPolarPlugin:
     Task {
       do {
         try await api.sendInitializationAndStartSyncNotifications(identifier: identifier)
+        // The Dart contract is Future<bool> (true = device ready for sync).
+        // The iOS SDK is `async throws` with no return value, so success MUST
+        // be reported as true — returning nil here made the Dart side's
+        // `result ?? false` report false on every successful call.
         onMain {
-          result(nil)
+          result(true)
         }
       } catch {
+        // Mirror the Android SDK, which swallows errors and returns false:
+        // false = device not ready (e.g. 202 SYSTEM_BUSY), caller may retry.
+        NSLog(
+          "PolarPlugin: sendInitializationAndStartSyncNotifications failed: \(error.localizedDescription)"
+        )
         onMain {
-          result(
-            FlutterError(
-              code: error.localizedDescription,
-              message: error.localizedDescription,
-              details: nil))
+          result(false)
         }
       }
     }
