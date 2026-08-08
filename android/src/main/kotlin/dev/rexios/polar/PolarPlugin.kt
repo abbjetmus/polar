@@ -221,6 +221,12 @@ class PolarPlugin :
             "getChargerState" -> getChargerState(call, result)
             "getDiskSpace" -> getDiskSpace(call, result)
             "getLocalTime" -> getLocalTime(call, result)
+            "foregroundEntered" -> {
+                // Restarts BLE scan after screen-off power save so the SDK's
+                // automatic reconnection can proceed (see PolarBleApi docs).
+                wrapper.api.foregroundEntered()
+                result.success(null)
+            }
             "setLocalTime" -> setLocalTime(call, result)
             "doFirstTimeUse" -> doFirstTimeUse(call, result)
             "isFtuDone" -> isFtuDone(call, result)
