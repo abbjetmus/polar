@@ -119,11 +119,22 @@ final _polarEpoch = DateTime.utc(2000).microsecondsSinceEpoch;
 
 /// Convert polar sample timestamps to [DateTime]
 ///
-/// The raw nanosecond values represent UTC time since the Polar epoch
-/// (1.1.2000) on both platforms. Polar 360 firmware 5.0.55 stamped offline
-/// samples with device-local time on Android, which is why this converter
-/// used to re-interpret the raw value as local there; firmware 6.1.19+
-/// stamps in UTC, matching iOS.
+/// **The meaning of the raw value depends on the SDK version, not only on the
+/// firmware.** On this branch (polar-ble-sdk 6.16.1) Android delivers offline
+/// sample timestamps in the device's local time, so they are re-interpreted as
+/// local here; iOS delivers UTC.
+///
+/// The 8.1.0 line behaves differently: there the raw value is UTC on both
+/// platforms, and commit `0e548ed` accordingly removed this platform fork. That
+/// commit was carried onto this branch by mistake when the SDK was reverted,
+/// which shifted every Android sample forward by the UTC offset. Verified on
+/// hardware 2026-08-09: a recording the sensor filed under `/R/141543/` — its
+/// own clock reading 14:15:43, confirmed correct by a `getLocalTime` skew of 0s
+/// — produced samples starting at 16:15:37, and its last sample was stamped
+/// 19:55:50 while the phone clock said 17:56:00.
+///
+/// So: keep this fork as long as the podspec/gradle pin is 6.16.x. If the SDK
+/// is moved back to 8.x, drop it again.
 class PolarSampleTimestampConverter extends JsonConverter<DateTime, int> {
   /// Constructor
   const PolarSampleTimestampConverter();
@@ -131,15 +142,52 @@ class PolarSampleTimestampConverter extends JsonConverter<DateTime, int> {
   @override
   DateTime fromJson(int json) {
     final micros = json ~/ 1000;
-    // Raw value is UTC — return as a local-zone DateTime pointing at the
-    // same instant, so the caller's .toUtc() yields the raw value unchanged.
-    return DateTime.fromMicrosecondsSinceEpoch(_polarEpoch + micros);
+    // Extract raw value as UTC (no timezone conversion)
+    final raw = DateTime.fromMicrosecondsSinceEpoch(
+      _polarEpoch + micros,
+      isUtc: true,
+    );
+
+    if (Platform.isIOS) {
+      // iOS: raw value is already UTC — keep as local DateTime
+      // so .toUtc() correctly returns the same UTC value
+      return DateTime.fromMicrosecondsSinceEpoch(_polarEpoch + micros);
+    } else {
+      // Android: raw value represents local time — re-create as local DateTime
+      // so .toUtc() correctly subtracts the timezone offset
+      return DateTime(
+        raw.year,
+        raw.month,
+        raw.day,
+        raw.hour,
+        raw.minute,
+        raw.second,
+        raw.millisecond,
+        raw.microsecond,
+      );
+    }
   }
 
   @override
   int toJson(DateTime object) {
-    final micros = object.microsecondsSinceEpoch - _polarEpoch;
-    return micros * 1000;
+    if (Platform.isIOS) {
+      final micros = object.microsecondsSinceEpoch - _polarEpoch;
+      return micros * 1000;
+    } else {
+      // Android: convert local DateTime components back to raw value
+      final utcView = DateTime.utc(
+        object.year,
+        object.month,
+        object.day,
+        object.hour,
+        object.minute,
+        object.second,
+        object.millisecond,
+        object.microsecond,
+      );
+      final micros = utcView.microsecondsSinceEpoch - _polarEpoch;
+      return micros * 1000;
+    }
   }
 }
 
