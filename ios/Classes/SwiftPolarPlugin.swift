@@ -1696,14 +1696,27 @@ public class SwiftPolarPlugin:
     _ = api.sendInitializationAndStartSyncNotifications(identifier: identifier)
       .subscribe(
         onCompleted: {
-          result(nil)
+          // The Dart contract is Future<bool> (true = device ready for sync).
+          // The iOS SDK models this as a Completable with no value, so
+          // completion *is* the success signal and MUST be reported as true —
+          // returning nil made the Dart side's `result ?? false` report false
+          // on every successful call, and the caller aborts the sync round on
+          // false. Android's SDK returns Single<Boolean> and forwards it, which
+          // is why only iOS was affected.
+          //
+          // Port of 4ffcf1b from master, where the 8.x SDK exposes this as
+          // `async throws` instead of a Completable.
+          result(true)
         },
         onError: { error in
-          result(
-            FlutterError(
-              code: error.localizedDescription,
-              message: error.localizedDescription,
-              details: nil))
+          // Report failure as `false`, not as an error: the caller retries once
+          // on false (202 SYSTEM_BUSY is transient and expected) and has no
+          // try/catch around the retry loop, so throwing here would skip both
+          // the retry and the graceful abort.
+          NSLog(
+            "PolarPlugin: sendInitializationAndStartSyncNotifications failed: \(error.localizedDescription)"
+          )
+          result(false)
         }
       )
   }
