@@ -24,8 +24,19 @@ public class SwiftPolarPlugin:
   PolarBleApiObserver,
   PolarBleApiPowerStateObserver,
   PolarBleApiDeviceFeaturesObserver,
-  PolarBleApiDeviceInfoObserver
+  PolarBleApiDeviceInfoObserver,
+  PolarBleApiLogger
 {
+  /// Forwards the SDK's own traces to stdout so they interleave with the app's
+  /// logs under `flutter run`. The SDK already runs at LOG_LEVEL_ALL and routes
+  /// everything through this callback (PolarBleApiImpl.logMessage) — it just
+  /// needs a logger assigned. The prefix makes the PS-FTP operation lines
+  /// greppable, which is what tells apart "device never answered" from "client
+  /// is waiting on the wrong thing".
+  public func message(_ str: String) {
+    print("[PolarSDK] \(str)")
+  }
+
   /// Binary messenger for dynamic EventChannel registration
   let messenger: FlutterBinaryMessenger
 
@@ -65,6 +76,7 @@ public class SwiftPolarPlugin:
     api.powerStateObserver = self
     api.deviceFeaturesObserver = self
     api.deviceInfoObserver = self
+    api.logger = self
   }
 
   public static func register(with registrar: FlutterPluginRegistrar) {
@@ -1304,7 +1316,9 @@ public class SwiftPolarPlugin:
 
   func getSleepRecordingState(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
     let identifier = call.arguments as! String
-    _ = api.getSleepRecordingState(identifier: identifier).subscribe(
+    _ = api.getSleepRecordingState(identifier: identifier)
+      .debug("getSleepRecordingState")
+      .subscribe(
       onSuccess: {
         result($0)
       },
@@ -1318,7 +1332,9 @@ public class SwiftPolarPlugin:
 
   func stopSleepRecording(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
     let identifier = call.arguments as! String
-    _ = api.stopSleepRecording(identifier: identifier).subscribe(
+    _ = api.stopSleepRecording(identifier: identifier)
+      .debug("stopSleepRecording")
+      .subscribe(
       onCompleted: {
         result(nil)
       },
@@ -1360,6 +1376,7 @@ public class SwiftPolarPlugin:
     }
 
     _ = api.getSleep(identifier: identifier, fromDate: fromDate, toDate: toDate)
+      .debug("getSleep")
       .subscribe(
         onSuccess: { sleepData in
           let isoFormatter = ISO8601DateFormatter()
