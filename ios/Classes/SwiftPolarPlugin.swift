@@ -1501,11 +1501,26 @@ public class SwiftPolarPlugin:
   }
 
   func getSleepRecordingState(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
-    let identifier = call.arguments as! String
+    guard let arguments = call.arguments as? [Any],
+      arguments.count == 2,
+      let identifier = arguments[0] as? String,
+      let timeoutMs = arguments[1] as? Int
+    else {
+      result(
+        FlutterError(
+          code: "INVALID_ARGUMENTS",
+          message: "Expected [identifier, timeoutMs]",
+          details: nil))
+      return
+    }
 
     Task {
       do {
-        let state = try await api.getSleepRecordingState(identifier: identifier)
+        // The SDK's own timeout (8.2.0+), not a Dart-side one: it cancels the
+        // underlying operation instead of merely abandoning the future, so a
+        // slow call cannot leave work queued on the serial PS-FTP queue.
+        let state = try await api.getSleepRecordingState(
+          identifier: identifier, timeoutMs: UInt64(timeoutMs))
         onMain {
           result(state)
         }

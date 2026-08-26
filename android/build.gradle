@@ -53,7 +53,7 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
 
     // Polar SDK with explicit version
-    api 'com.github.polarofficial:polar-ble-sdk:8.1.0'
+    api 'com.github.polarofficial:polar-ble-sdk:8.2.0'
 
     // Kotlin Coroutines (SDK 8.x is coroutine/Flow based)
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'

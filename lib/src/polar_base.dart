@@ -1108,10 +1108,24 @@ class Polar {
   /// Per Polar's sync guideline, a night's sleep analysis only becomes
   /// available via [getSleep] after the device has stopped sleep recording for
   /// it. Use this to check finalization before reading.
-  Future<bool> getSleepRecordingState(String identifier) async {
+  ///
+  /// [timeout] is enforced by the SDK itself (8.2.0+, defaults to 30s there),
+  /// not by a Dart-side `Future.timeout`. That matters: a Dart timeout
+  /// abandons the future but cannot cancel the native call, so the underlying
+  /// operation stays in flight and can wedge the serial PS-FTP queue. The SDK
+  /// cancels for real — on Android since 8.2.0 replaced the notification
+  /// `LinkedBlockingQueue` with a cancellable `Channel`, which is what made
+  /// coroutine cancellation effective and let this plugin drop its own
+  /// abandon-the-collector workaround.
+  ///
+  /// Throws if the device does not answer within [timeout].
+  Future<bool> getSleepRecordingState(
+    String identifier, {
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
     final result = await _methodChannel.invokeMethod<bool>(
       'getSleepRecordingState',
-      identifier,
+      [identifier, timeout.inMilliseconds],
     );
     return result ?? false;
   }

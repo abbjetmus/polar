@@ -49,7 +49,6 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -60,7 +59,6 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import java.lang.reflect.Type
 import java.time.Instant
 import java.time.LocalDate
@@ -1155,31 +1153,28 @@ class PolarPlugin :
     }
 
     private fun getSleepRecordingState(call: MethodCall, result: Result) {
-        val identifier = call.arguments as String
+        val arguments = call.arguments as List<*>
+        val identifier = arguments[0] as String
+        val timeoutMs = (arguments[1] as Number).toLong()
 
         scope.launch {
             try {
-                // SDK 8.1.0's suspend getSleepRecordingState() hangs forever: its
-                // take(1) cancels the underlying channelFlow, whose producer is
-                // stuck in a blocking Object.wait() that coroutine cancellation
-                // cannot interrupt, and structured concurrency then waits on it.
-                // Consume the observe Flow ourselves and hand the first value out
-                // through a deferred, abandoning (not joining) the collector.
-                val deferred = CompletableDeferred<Boolean>()
-                val collectJob = scope.launch {
-                    wrapper.api.observeSleepRecordingState(identifier).collect { states ->
-                        if (states.isNotEmpty()) deferred.complete(states.last())
-                    }
-                }
-                val state = withTimeoutOrNull(15_000) { deferred.await() }
-                collectJob.cancel()
-                if (state == null) {
-                    android.util.Log.e("PolarPlugin", "getSleepRecordingState timed out")
-                    result.error("TIMEOUT", "getSleepRecordingState timed out", null)
-                } else {
-                    android.util.Log.d("PolarPlugin", "getSleepRecordingState=$state")
-                    result.success(state)
-                }
+                // Uses the SDK's own timeout (8.2.0+) rather than the wrapper
+                // workaround this replaced. That workaround existed because
+                // 8.1.0 buffered PS-FTP notifications in a LinkedBlockingQueue,
+                // so take(1) cancelling the flow left the producer parked in a
+                // blocking wait that coroutine cancellation could not interrupt
+                // — structured concurrency then waited on it forever, and even
+                // a withTimeoutOrNull around the collector would have joined
+                // that stuck child. We had to abandon the collector instead.
+                //
+                // 8.2.0 replaced that queue with a cancellable Channel behind a
+                // shared hot flow (BlePsFtpClient.kt, 156+/277-), so cancellation
+                // now actually propagates and the SDK's withTimeoutOrNull works.
+                // Throws PolarTimeoutException when the device stays silent.
+                val state = wrapper.api.getSleepRecordingState(identifier, timeoutMs)
+                android.util.Log.d("PolarPlugin", "getSleepRecordingState=$state")
+                result.success(state)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
