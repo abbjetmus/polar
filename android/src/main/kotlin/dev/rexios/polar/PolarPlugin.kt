@@ -1975,6 +1975,12 @@ class StreamingChannel(
                 PolarDeviceDataType.PRESSURE -> api.startPressureStreaming(identifier, settings)
                 PolarDeviceDataType.SKIN_TEMPERATURE -> api.startSkinTemperatureStreaming(identifier, settings)
                 PolarDeviceDataType.LOCATION -> api.startLocationStreaming(identifier, settings)
+                // New in polar-ble-sdk 8.3.0. Not a stream this wrapper
+                // exposes; the branch exists because the when is exhaustive.
+                PolarDeviceDataType.DERIVED_MEASUREMENT ->
+                    throw UnsupportedOperationException(
+                        "DERIVED_MEASUREMENT streaming is not supported by this plugin",
+                    )
             }
 
         job =
