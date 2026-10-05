@@ -449,7 +449,7 @@ class PolarPlugin :
         scope.launch {
             try {
                 val status = wrapper.api.requestRecordingStatus(identifier)
-                result.success(listOf(status.first, status.second))
+                result.success(listOf(status.ongoing, status.entryId))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
@@ -1794,7 +1794,11 @@ class PolarWrapper(
     val api: PolarBleApi =
         PolarBleApiDefaultImpl.defaultImplementation(
             context,
-            PolarBleSdkFeature.values().toSet(),
+            // 8.4.0 added Companion Device Manager association as an opt-in
+            // feature. Enabling every feature would quietly opt in to it, and
+            // with it background presence observation nobody asked for.
+            PolarBleSdkFeature.values().toSet() -
+                PolarBleSdkFeature.FEATURE_COMPANION_DEVICE_MANAGEMENT,
         ),
     private val sinks: MutableMap<Int, EventSink> = mutableMapOf(),
 ) : PolarBleApiCallbackProvider {
