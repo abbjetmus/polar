@@ -263,6 +263,7 @@ class PolarPlugin :
             "getSteps" -> getSteps(call, result)
             "getSleep" -> getSleep(call, result)
             "getSleepRecordingState" -> getSleepRecordingState(call, result)
+            "getSleepRecordingStatus" -> getSleepRecordingStatus(call, result)
             "stopSleepRecording" -> stopSleepRecording(call, result)
             "getDistance" -> getDistance(call, result)
             "getActiveTime" -> getActiveTime(call, result)
@@ -1172,6 +1173,7 @@ class PolarPlugin :
                 // shared hot flow (BlePsFtpClient.kt, 156+/277-), so cancellation
                 // now actually propagates and the SDK's withTimeoutOrNull works.
                 // Throws PolarTimeoutException when the device stays silent.
+                @Suppress("DEPRECATION")
                 val state = wrapper.api.getSleepRecordingState(identifier, timeoutMs)
                 android.util.Log.d("PolarPlugin", "getSleepRecordingState=$state")
                 result.success(state)
@@ -1179,6 +1181,28 @@ class PolarPlugin :
                 throw e
             } catch (e: Throwable) {
                 android.util.Log.e("PolarPlugin", "Error in getSleepRecordingState: ${e.message}", e)
+                result.error(e.toString(), e.message, null)
+            }
+        }
+    }
+
+    private fun getSleepRecordingStatus(call: MethodCall, result: Result) {
+        val arguments = call.arguments as List<*>
+        val identifier = arguments[0] as String
+        val timeoutMs = (arguments[1] as Number).toLong()
+
+        scope.launch {
+            try {
+                // 8.4.0+: reports UNKNOWN when the device leaves the state out,
+                // where the deprecated getSleepRecordingState read that as "off".
+                // Same SDK-enforced timeout as getSleepRecordingState.
+                val status = wrapper.api.getSleepRecordingStatus(identifier, timeoutMs)
+                android.util.Log.d("PolarPlugin", "getSleepRecordingStatus=$status")
+                result.success(status.name.lowercase())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                android.util.Log.e("PolarPlugin", "Error in getSleepRecordingStatus: ${e.message}", e)
                 result.error(e.toString(), e.message, null)
             }
         }

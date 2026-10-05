@@ -1119,6 +1119,9 @@ class Polar {
   /// abandon-the-collector workaround.
   ///
   /// Throws if the device does not answer within [timeout].
+  @Deprecated(
+    'Use getSleepRecordingStatus, which reports unknown state instead of off',
+  )
   Future<bool> getSleepRecordingState(
     String identifier, {
     Duration timeout = const Duration(seconds: 30),
@@ -1130,13 +1133,32 @@ class Polar {
     return result ?? false;
   }
 
+  /// Gets the sleep recording status (polar-ble-sdk 8.4.0+).
+  ///
+  /// Unlike [getSleepRecordingState], a device that answers without reporting
+  /// the state yields [PolarSleepRecordingStatus.unknown] instead of being
+  /// read as "off". The timeout is enforced by the SDK, exactly as for
+  /// [getSleepRecordingState].
+  ///
+  /// Throws if the device does not answer within [timeout].
+  Future<PolarSleepRecordingStatus> getSleepRecordingStatus(
+    String identifier, {
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    final result = await _methodChannel.invokeMethod<String>(
+      'getSleepRecordingStatus',
+      [identifier, timeout.inMilliseconds],
+    );
+    return PolarSleepRecordingStatus.fromJson(result ?? 'unknown');
+  }
+
   /// Stops the ongoing sleep recording so the device finalizes the latest
   /// night's sleep analysis, making it available via [getSleep].
   ///
   /// Normally the device stops recording (and finalizes) within ~90 minutes of
   /// waking; calling this forces finalization so the night can be read on the
-  /// same sync. After stopping, poll [getSleepRecordingState] until it returns
-  /// false before calling [getSleep].
+  /// same sync. After stopping, poll [getSleepRecordingStatus] until it
+  /// returns [PolarSleepRecordingStatus.disabled] before calling [getSleep].
   Future<void> stopSleepRecording(String identifier) {
     return _methodChannel.invokeMethod('stopSleepRecording', identifier);
   }

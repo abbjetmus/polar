@@ -180,6 +180,8 @@ public class SwiftPolarPlugin:
         getSleep(call, result)
       case "getSleepRecordingState":
         getSleepRecordingState(call, result)
+      case "getSleepRecordingStatus":
+        getSleepRecordingStatus(call, result)
       case "stopSleepRecording":
         stopSleepRecording(call, result)
       case "getDistance":
@@ -1529,6 +1531,46 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "Error getting sleep recording state",
+              message: error.localizedDescription, details: nil))
+        }
+      }
+    }
+  }
+
+  func getSleepRecordingStatus(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
+    guard let arguments = call.arguments as? [Any],
+      arguments.count == 2,
+      let identifier = arguments[0] as? String,
+      let timeoutMs = arguments[1] as? Int
+    else {
+      result(
+        FlutterError(
+          code: "INVALID_ARGUMENTS",
+          message: "Expected [identifier, timeoutMs]",
+          details: nil))
+      return
+    }
+
+    Task {
+      do {
+        // 8.4.0+: reports .unknown when the device leaves the state out,
+        // where the deprecated getSleepRecordingState read that as "off".
+        let status = try await api.getSleepRecordingStatus(
+          identifier: identifier, timeoutMs: UInt64(timeoutMs))
+        let name: String
+        switch status {
+        case .enabled: name = "enabled"
+        case .disabled: name = "disabled"
+        case .unknown: name = "unknown"
+        }
+        onMain {
+          result(name)
+        }
+      } catch {
+        onMain {
+          result(
+            FlutterError(
+              code: "Error getting sleep recording status",
               message: error.localizedDescription, details: nil))
         }
       }
