@@ -66,10 +66,32 @@ public class SwiftPolarPlugin:
     self.searchChannel = searchChannel
   }
 
+  /// CoreBluetooth state-restoration identifier. Set it from the app
+  /// delegate *before* plugins are registered: iOS only relaunches an app
+  /// into the background for BLE events when the central manager carrying
+  /// this identifier exists by the end of `didFinishLaunching`.
+  public static var restoreIdentifier: String?
+
+  /// Only one central manager per process may carry the restore identifier.
+  /// The first engine (the app's) claims it; a headless engine started later
+  /// (a background task) gets a plain manager.
+  private static var restoreIdentifierClaimed = false
+
+  /// Engines currently registered in this process. Each engine gets its own
+  /// plugin instance and its own BLE stack, so Dart uses this to tell
+  /// whether it is alone (see `Polar.attachedEngineCount`).
+  private static var attachedEngines = 0
+
   private func initApi() {
     guard api == nil else { return }
+    var restoreId: String? = nil
+    if let id = SwiftPolarPlugin.restoreIdentifier, !SwiftPolarPlugin.restoreIdentifierClaimed {
+      SwiftPolarPlugin.restoreIdentifierClaimed = true
+      restoreId = id
+    }
     api = PolarBleApiDefaultImpl.polarImplementation(
-      DispatchQueue.main, features: Set(PolarBleSdkFeature.allCases))
+      DispatchQueue.main, features: Set(PolarBleSdkFeature.allCases),
+      restoreIdentifier: restoreId)
 
     api.observer = self
     api.powerStateObserver = self
@@ -95,6 +117,20 @@ public class SwiftPolarPlugin:
     registrar.addMethodCallDelegate(instance, channel: methodChannel)
     eventChannel.setStreamHandler(instance)
     searchChannel.setStreamHandler(instance.searchHandler)
+    registrar.publish(instance)
+    attachedEngines += 1
+
+    // With state restoration the manager must exist before launch finishes,
+    // not on the first Dart call. The SDK creates it lazily; reading the
+    // power state forces it.
+    if restoreIdentifier != nil && !restoreIdentifierClaimed {
+      instance.initApi()
+      _ = instance.api.isBlePowered
+    }
+  }
+
+  public func detachFromEngine(for registrar: FlutterPluginRegistrar) {
+    SwiftPolarPlugin.attachedEngines -= 1
   }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -102,6 +138,8 @@ public class SwiftPolarPlugin:
 
     do {
       switch call.method {
+      case "attachedEngineCount":
+        result(SwiftPolarPlugin.attachedEngines)
       case "connectToDevice":
         try api.connectToDevice(call.arguments as! String)
         result(nil)

@@ -173,6 +173,17 @@ class Polar {
         );
   }
 
+  /// How many Flutter engines in this process have the plugin attached.
+  ///
+  /// A headless engine (e.g. a WorkManager or BGTask job) sees more than one
+  /// when the app's own engine is alive too. On Android the engines share one
+  /// SDK instance and connection; on iOS each has its own BLE stack, so two
+  /// engines working the same device at once can corrupt each other's file
+  /// transfers.
+  Future<int> attachedEngineCount() async {
+    return await _methodChannel.invokeMethod<int>('attachedEngineCount') ?? 1;
+  }
+
   /// Request a connection to a Polar device. Invokes `PolarBleApiObservers` polarDeviceConnected.
   /// - Parameter identifier: Polar device id printed on the sensor/device or UUID.
   /// - Throws: InvalidArgument if identifier is invalid polar device id or invalid uuid

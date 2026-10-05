@@ -123,6 +123,12 @@ private var wrapperInternal: PolarWrapper? = null
 private val wrapper: PolarWrapper
     get() = wrapperInternal!!
 
+// Engines currently attached to this process. The wrapper and the SDK behind
+// it are process-wide, so a headless engine (a WorkManager job) shares them
+// with the app's engine: whichever engine goes away first must not shut the
+// API down under the other.
+private var attachedEngines = 0
+
 /** PolarPlugin */
 class PolarPlugin :
     FlutterPlugin,
@@ -166,6 +172,7 @@ class PolarPlugin :
         searchChannel.setStreamHandler(searchHandler)
 
         context = flutterPluginBinding.applicationContext
+        attachedEngines++
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -173,9 +180,19 @@ class PolarPlugin :
         eventChannel.setStreamHandler(null)
         searchChannel.setStreamHandler(null)
         streamingChannels.values.forEach { it.dispose() }
-        shutDown()
+        // A destroyed engine rarely cancels its Dart subscriptions, so its
+        // sinks would otherwise stay registered and keep the API alive (and
+        // keep receiving events on a dead messenger).
+        wrapperInternal?.removeSinksOf(sinkOwner)
+        attachedEngines--
+        if (attachedEngines == 0) shutDown()
         scope.cancel()
     }
+
+    // Prefix for this engine's sink ids. The Dart side keys its listener by
+    // identityHashCode, which is only unique within one isolate, so two
+    // engines could otherwise register the same id and overwrite each other.
+    private val sinkOwner = "${System.identityHashCode(this)}:"
 
     private fun initApi() {
         if (wrapperInternal == null) {
@@ -190,6 +207,7 @@ class PolarPlugin :
         initApi()
 
         when (call.method) {
+            "attachedEngineCount" -> result.success(attachedEngines)
             "connectToDevice" -> {
                 try {
                     val identifier = call.arguments as String
@@ -281,15 +299,15 @@ class PolarPlugin :
         events: EventSink,
     ) {
         initApi()
-        val id = arguments as Int
+        val id = sinkOwner + (arguments as Int)
         android.util.Log.d("PolarPlugin", "onListen: id=$id, registering event sink")
         wrapper.addSink(id, events)
     }
 
     override fun onCancel(arguments: Any?) {
-        val id = arguments as Int
+        val id = sinkOwner + (arguments as Int)
         android.util.Log.d("PolarPlugin", "onCancel: id=$id, canceling event sink")
-        wrapper.removeSink(id)
+        wrapperInternal?.removeSink(id)
     }
 
     private val searchHandler =
@@ -345,7 +363,9 @@ class PolarPlugin :
             LifecycleEventObserver { _, event ->
                 when (event) {
                     Event.ON_RESUME -> wrapperInternal?.api?.foregroundEntered()
-                    Event.ON_DESTROY -> shutDown()
+                    // Only when no other engine (a background job) is still
+                    // using the shared API.
+                    Event.ON_DESTROY -> if (attachedEngines <= 1) shutDown()
                     else -> {}
                 }
             },
@@ -359,8 +379,11 @@ class PolarPlugin :
     override fun onDetachedFromActivity() {}
 
     private fun shutDown() {
-        if (wrapperInternal == null) return
-        wrapper.shutDown()
+        val current = wrapperInternal ?: return
+        // A shut-down SDK instance is dead for good, so drop it: the next
+        // call in this process, from any engine, builds a fresh one instead
+        // of failing with "PolarBleApi instance is shutdown".
+        if (current.shutDown()) wrapperInternal = null
     }
 
     private fun getAvailableOnlineStreamDataTypes(
@@ -1824,7 +1847,7 @@ class PolarWrapper(
             PolarBleSdkFeature.values().toSet() -
                 PolarBleSdkFeature.FEATURE_COMPANION_DEVICE_MANAGEMENT,
         ),
-    private val sinks: MutableMap<Int, EventSink> = mutableMapOf(),
+    private val sinks: MutableMap<String, EventSink> = mutableMapOf(),
 ) : PolarBleApiCallbackProvider {
     init {
         android.util.Log.d("PolarPlugin", "PolarWrapper init: setting API callback")
@@ -1832,14 +1855,18 @@ class PolarWrapper(
     }
 
     fun addSink(
-        id: Int,
+        id: String,
         sink: EventSink,
     ) {
         sinks[id] = sink
         android.util.Log.d("PolarPlugin", "addSink: id=$id, total sinks=${sinks.size}")
     }
 
-    fun removeSink(id: Int) {
+    fun removeSinksOf(owner: String) {
+        sinks.keys.removeAll { it.startsWith(owner) }
+    }
+
+    fun removeSink(id: String) {
         sinks.remove(id)
         android.util.Log.d("PolarPlugin", "removeSink: id=$id, remaining sinks=${sinks.size}")
     }
@@ -1857,14 +1884,16 @@ class PolarWrapper(
         }
     }
 
-    fun shutDown() {
+    /** Returns true if the API was shut down (or already was). */
+    fun shutDown(): Boolean {
         // Do not shutdown the api if other engines are still using it
-        if (sinks.isNotEmpty()) return
+        if (sinks.isNotEmpty()) return false
         try {
             api.shutDown()
         } catch (e: Exception) {
             // This will throw if the API is already shut down
         }
+        return true
     }
 
     override fun blePowerStateChanged(powered: Boolean) {
