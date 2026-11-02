@@ -14,6 +14,7 @@ PolarFirmwareUpdateCheckStatus _$PolarFirmwareUpdateCheckStatusFromJson(
       type: json['type'] as String,
       version: json['version'] as String?,
       details: json['details'] as String?,
+      mandatory: json['mandatory'] as bool?,
     );
 
 Map<String, dynamic> _$PolarFirmwareUpdateCheckStatusToJson(
@@ -22,6 +23,7 @@ Map<String, dynamic> _$PolarFirmwareUpdateCheckStatusToJson(
       'type': instance.type,
       'version': instance.version,
       'details': instance.details,
+      'mandatory': instance.mandatory,
     };
 
 PolarFirmwareUpdateStatus _$PolarFirmwareUpdateStatusFromJson(

@@ -1810,7 +1810,8 @@ class PolarPlugin :
         return when (status) {
             is CheckFirmwareUpdateStatus.CheckFwUpdateAvailable -> mapOf(
                 "type" to "available",
-                "version" to status.version
+                "version" to status.version,
+                "mandatory" to status.mandatoryUpdate
             )
             is CheckFirmwareUpdateStatus.CheckFwUpdateNotAvailable -> mapOf(
                 "type" to "notAvailable",

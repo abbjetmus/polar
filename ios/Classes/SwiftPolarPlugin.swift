@@ -2100,8 +2100,11 @@ public class SwiftPolarPlugin:
         for try await status in api.checkFirmwareUpdate(identifier) {
           var jsonStatus: [String: Any] = [:]
           switch status {
-          case .checkFwUpdateAvailable(let version):
+          case .checkFwUpdateAvailable(let version, let mandatory):
             jsonStatus = ["type": "available", "version": version]
+            if let mandatory {
+              jsonStatus["mandatory"] = mandatory
+            }
           case .checkFwUpdateNotAvailable(let details):
             jsonStatus = ["type": "notAvailable", "details": details]
           case .checkFwUpdateFailed(let details):

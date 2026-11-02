@@ -14,11 +14,16 @@ class PolarFirmwareUpdateCheckStatus {
   /// Details if not available or failed
   final String? details;
 
+  /// Whether the available version must be installed (polar-ble-sdk 8.5.0+).
+  /// Null when the SDK could not tell.
+  final bool? mandatory;
+
   /// Constructor
   PolarFirmwareUpdateCheckStatus({
     required this.type,
     this.version,
     this.details,
+    this.mandatory,
   });
 
   /// From json
