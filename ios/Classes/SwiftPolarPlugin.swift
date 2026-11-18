@@ -241,7 +241,7 @@ public class SwiftPolarPlugin:
     } catch {
       result(
         FlutterError(
-          code: "Error in Polar plugin", message: error.localizedDescription, details: nil))
+          code: "Error in Polar plugin", message: errorMessage(error), details: nil))
     }
   }
 
@@ -282,7 +282,7 @@ public class SwiftPolarPlugin:
             onMain {
               events(
                 FlutterError(
-                  code: "Error in searchForDevice", message: error.localizedDescription,
+                  code: "Error in searchForDevice", message: errorMessage(error),
                   details: nil)
               )
             }
@@ -338,7 +338,7 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "Unable to get available online stream data types",
-              message: error.localizedDescription, details: nil))
+              message: errorMessage(error), details: nil))
         }
       }
     }
@@ -361,7 +361,7 @@ public class SwiftPolarPlugin:
         onMain {
           result(
             FlutterError(
-              code: "Unable to request stream settings", message: error.localizedDescription,
+              code: "Unable to request stream settings", message: errorMessage(error),
               details: nil))
         }
       }
@@ -390,7 +390,7 @@ public class SwiftPolarPlugin:
         onMain {
           result(
             FlutterError(
-              code: "Error starting recording", message: error.localizedDescription, details: nil))
+              code: "Error starting recording", message: errorMessage(error), details: nil))
         }
       }
     }
@@ -409,7 +409,7 @@ public class SwiftPolarPlugin:
         onMain {
           result(
             FlutterError(
-              code: "Error stopping recording", message: error.localizedDescription, details: nil))
+              code: "Error stopping recording", message: errorMessage(error), details: nil))
         }
       }
     }
@@ -428,7 +428,7 @@ public class SwiftPolarPlugin:
         onMain {
           result(
             FlutterError(
-              code: "Error stopping recording", message: error.localizedDescription, details: nil))
+              code: "Error stopping recording", message: errorMessage(error), details: nil))
         }
       }
     }
@@ -454,7 +454,7 @@ public class SwiftPolarPlugin:
         onMain {
           result(
             FlutterError(
-              code: "Error listing exercises", message: error.localizedDescription, details: nil))
+              code: "Error listing exercises", message: errorMessage(error), details: nil))
         }
       }
     }
@@ -483,7 +483,7 @@ public class SwiftPolarPlugin:
         onMain {
           result(
             FlutterError(
-              code: "Error  fetching exercise", message: error.localizedDescription, details: nil))
+              code: "Error  fetching exercise", message: errorMessage(error), details: nil))
         }
       }
     }
@@ -508,7 +508,7 @@ public class SwiftPolarPlugin:
         onMain {
           result(
             FlutterError(
-              code: "Error removing exercise", message: error.localizedDescription, details: nil))
+              code: "Error removing exercise", message: errorMessage(error), details: nil))
         }
       }
     }
@@ -533,7 +533,7 @@ public class SwiftPolarPlugin:
         onMain {
           result(
             FlutterError(
-              code: "Error setting led config", message: error.localizedDescription, details: nil))
+              code: "Error setting led config", message: errorMessage(error), details: nil))
         }
       }
     }
@@ -552,7 +552,7 @@ public class SwiftPolarPlugin:
         onMain {
           result(
             FlutterError(
-              code: "Error doing factory reset", message: error.localizedDescription, details: nil))
+              code: "Error doing factory reset", message: errorMessage(error), details: nil))
         }
       }
     }
@@ -571,7 +571,7 @@ public class SwiftPolarPlugin:
         onMain {
           result(
             FlutterError(
-              code: "Error doing restart", message: error.localizedDescription, details: nil))
+              code: "Error doing restart", message: errorMessage(error), details: nil))
         }
       }
     }
@@ -590,7 +590,7 @@ public class SwiftPolarPlugin:
         onMain {
           result(
             FlutterError(
-              code: "Error enabling SDK mode", message: error.localizedDescription, details: nil))
+              code: "Error enabling SDK mode", message: errorMessage(error), details: nil))
         }
       }
     }
@@ -609,7 +609,7 @@ public class SwiftPolarPlugin:
         onMain {
           result(
             FlutterError(
-              code: "Error disabling SDK mode", message: error.localizedDescription, details: nil))
+              code: "Error disabling SDK mode", message: errorMessage(error), details: nil))
         }
       }
     }
@@ -632,7 +632,7 @@ public class SwiftPolarPlugin:
         onMain {
           result(
             FlutterError(
-              code: "Error setting automatic OHR measurement", message: error.localizedDescription,
+              code: "Error setting automatic OHR measurement", message: errorMessage(error),
               details: nil))
         }
       }
@@ -652,7 +652,7 @@ public class SwiftPolarPlugin:
         onMain {
           result(
             FlutterError(
-              code: "Error checking SDK mode status", message: error.localizedDescription,
+              code: "Error checking SDK mode status", message: errorMessage(error),
               details: nil))
         }
       }
@@ -784,7 +784,7 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "ERROR_GETTING_DATA_TYPES",
-              message: error.localizedDescription,
+              message: errorMessage(error),
               details: nil
             ))
         }
@@ -834,7 +834,7 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "REQUEST_ERROR",
-              message: "Error requesting offline recording settings: \(error.localizedDescription)",
+              message: "Error requesting offline recording settings: \(errorMessage(error))",
               details: nil))
         }
       }
@@ -865,7 +865,7 @@ public class SwiftPolarPlugin:
         onMain {
           result(
             FlutterError(
-              code: "Error starting offline recording", message: error.localizedDescription,
+              code: "Error starting offline recording", message: errorMessage(error),
               details: nil))
         }
       }
@@ -888,7 +888,7 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "Error stopping offline recording",
-              message: error.localizedDescription.description, details: nil))
+              message: errorMessage(error), details: nil))
         }
       }
     }
@@ -912,7 +912,7 @@ public class SwiftPolarPlugin:
         onMain {
           result(
             FlutterError(
-              code: "Error getting offline recording status", message: error.localizedDescription,
+              code: "Error getting offline recording status", message: errorMessage(error),
               details: nil)
           )
         }
@@ -961,7 +961,7 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "Error setting offline recording trigger",
-              message: String(describing: error), details: nil))
+              message: errorMessage(error), details: nil))
         }
       }
     }
@@ -1011,7 +1011,7 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "ERROR",
-              message: "Offline recording listing error: \(error.localizedDescription)",
+              message: "Offline recording listing error: \(errorMessage(error))",
               details: nil))
         }
       }
@@ -1067,7 +1067,7 @@ public class SwiftPolarPlugin:
             result(
               FlutterError(
                 code: "FETCH_ERROR",
-                message: "Failed to fetch recording: \(error.localizedDescription)", details: nil))
+                message: "Failed to fetch recording: \(errorMessage(error))", details: nil))
           }
         }
       }
@@ -1108,7 +1108,7 @@ public class SwiftPolarPlugin:
         onMain {
           result(
             FlutterError(
-              code: "Error removing exercise", message: error.localizedDescription, details: nil))
+              code: "Error removing exercise", message: errorMessage(error), details: nil))
         }
       }
     }
@@ -1135,7 +1135,7 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "GET_CHARGER_STATE_ERROR",
-              message: error.localizedDescription,
+              message: errorMessage(error),
               details: nil))
         }
       }
@@ -1157,7 +1157,7 @@ public class SwiftPolarPlugin:
         onMain {
           result(
             FlutterError(
-              code: "Error getting disk space", message: error.localizedDescription, details: nil))
+              code: "Error getting disk space", message: errorMessage(error), details: nil))
         }
       }
     }
@@ -1186,7 +1186,7 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "GET_LOCAL_TIME_ERROR",
-              message: error.localizedDescription,
+              message: errorMessage(error),
               details: nil
             )
           )
@@ -1223,7 +1223,7 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "SET_LOCAL_TIME_ERROR",
-              message: error.localizedDescription,
+              message: errorMessage(error),
               details: nil
             )
           )
@@ -1326,7 +1326,7 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "FTU_ERROR",
-              message: error.localizedDescription,
+              message: errorMessage(error),
               details: nil
             ))
         }
@@ -1356,7 +1356,7 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "FTU_CHECK_ERROR",
-              message: error.localizedDescription,
+              message: errorMessage(error),
               details: nil
             )
           )
@@ -1414,7 +1414,7 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "ERROR_DELETING_DATA",
-              message: error.localizedDescription,
+              message: errorMessage(error),
               details: nil))
         }
       }
@@ -1462,7 +1462,7 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "ERROR_DELETING_FOLDERS",
-              message: error.localizedDescription,
+              message: errorMessage(error),
               details: nil))
         }
       }
@@ -1524,7 +1524,7 @@ public class SwiftPolarPlugin:
             result(
               FlutterError(
                 code: "ENCODING_ERROR",
-                message: "Failed to encode steps data: \(error.localizedDescription)",
+                message: "Failed to encode steps data: \(errorMessage(error))",
                 details: nil))
           }
         }
@@ -1533,7 +1533,7 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "ERROR_GETTING_STEPS",
-              message: error.localizedDescription,
+              message: errorMessage(error),
               details: nil))
         }
       }
@@ -1569,7 +1569,7 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "Error getting sleep recording state",
-              message: error.localizedDescription, details: nil))
+              message: errorMessage(error), details: nil))
         }
       }
     }
@@ -1609,7 +1609,7 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "Error getting sleep recording status",
-              message: error.localizedDescription, details: nil))
+              message: errorMessage(error), details: nil))
         }
       }
     }
@@ -1629,7 +1629,7 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "Error stopping sleep recording",
-              message: error.localizedDescription, details: nil))
+              message: errorMessage(error), details: nil))
         }
       }
     }
@@ -1739,7 +1739,7 @@ public class SwiftPolarPlugin:
             result(
               FlutterError(
                 code: "ENCODING_ERROR",
-                message: "Failed to encode sleep data: \(error.localizedDescription)",
+                message: "Failed to encode sleep data: \(errorMessage(error))",
                 details: nil))
           }
         }
@@ -1748,7 +1748,7 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "ERROR_GETTING_SLEEP",
-              message: error.localizedDescription,
+              message: errorMessage(error),
               details: nil))
         }
       }
@@ -1811,7 +1811,7 @@ public class SwiftPolarPlugin:
             result(
               FlutterError(
                 code: "ENCODING_ERROR",
-                message: "Failed to encode distance data: \(error.localizedDescription)",
+                message: "Failed to encode distance data: \(errorMessage(error))",
                 details: nil))
           }
         }
@@ -1820,7 +1820,7 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "ERROR_GETTING_DISTANCE",
-              message: error.localizedDescription,
+              message: errorMessage(error),
               details: nil))
         }
       }
@@ -1883,7 +1883,7 @@ public class SwiftPolarPlugin:
             result(
               FlutterError(
                 code: "ENCODING_ERROR",
-                message: "Failed to encode active time data: \(error.localizedDescription)",
+                message: "Failed to encode active time data: \(errorMessage(error))",
                 details: nil))
           }
         }
@@ -1892,7 +1892,7 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "ERROR_GETTING_ACTIVE_TIME",
-              message: error.localizedDescription,
+              message: errorMessage(error),
               details: nil))
         }
       }
@@ -2004,7 +2004,7 @@ public class SwiftPolarPlugin:
             result(
               FlutterError(
                 code: "ENCODING_ERROR",
-                message: "Failed to encode activity sample data: \(error.localizedDescription)",
+                message: "Failed to encode activity sample data: \(errorMessage(error))",
                 details: nil))
           }
         }
@@ -2013,7 +2013,7 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: "ERROR_GETTING_ACTIVITY_SAMPLE_DATA",
-              message: error.localizedDescription,
+              message: errorMessage(error),
               details: nil))
         }
       }
@@ -2078,7 +2078,7 @@ public class SwiftPolarPlugin:
           result(
             FlutterError(
               code: error.localizedDescription,
-              message: error.localizedDescription,
+              message: errorMessage(error),
               details: nil))
         }
       }
@@ -2304,7 +2304,7 @@ class StreamingChannel: NSObject, FlutterStreamHandler {
           onMain {
             events(
               FlutterError(
-                code: "Error while streaming", message: error.localizedDescription, details: nil))
+                code: "Error while streaming", message: errorMessage(error), details: nil))
           }
         }
       }
